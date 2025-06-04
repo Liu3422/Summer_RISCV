@@ -1,0 +1,33 @@
+# chat code...
+# Vivado auto-generated files
+*.log
+*.jou
+*.str
+*.zip
+*.html
+*.xml
+*.wdb
+*.dmp
+
+# Vivado folders
+.cache/
+.hw/
+.ip_user_files/
+.sim/
+.xpr/
+.xgui/
+.runs/
+.webtalk/
+.sdk/
+.project/
+*.srcs/
+*.xpr
+*.sdk/
+
+# OS/editor stuff
+.DS_Store
+*.swp
+*.bak
+*.tmp
+*.class
+.vscode/
