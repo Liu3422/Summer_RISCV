@@ -21,7 +21,7 @@
 
 
 module top(
-    input logic clk, n_rst,
+    input logic clk, n_rst
     );
 
 logic [31:0] PC;
@@ -94,8 +94,8 @@ assign ALU_in2 = (ALUSrc) ? imm_out : rd2;
 ALU_control DUT5 (
     .instr({instr[30], instr[14:12]}),
     .ALUOp(ALUOp),
-    .ALU_Operation(ALU_Operation);
-)
+    .ALU_Operation(ALU_Operation)
+);
 
 logic [31:0] execute_data; //data memory
 execute_reg_file DUT6(
@@ -114,7 +114,7 @@ imm_gen DUT7(
     .n_rst(n_rst),
     .instr(instr),
     .imm_out(imm_out)
-)
+);
 endmodule
 
 
