@@ -23,6 +23,7 @@
 *.srcs/
 *.xpr
 *.sdk/
+vivado_project/
 
 # OS/editor stuff
 .DS_Store
