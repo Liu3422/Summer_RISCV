@@ -24,6 +24,7 @@
 *.xpr
 *.sdk/
 vivado_project/
+Summer_RV32I/
 
 # OS/editor stuff
 .DS_Store
