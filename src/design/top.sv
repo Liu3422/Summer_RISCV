@@ -37,7 +37,7 @@ end
 logic beq_cond, PCSrc, zero;
 
 assign beq_cond = PCSrc & zero;
-assign zero = (rd1 == rd2);
+assign zero = (ALU_out == 32'b0); // zero is raised
 
 always_comb begin
     if(beq_cond) 
@@ -104,7 +104,7 @@ execute_reg_file DUT6(.clk(clk), .n_rst(n_rst),
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
 
 logic [11:0] imm_out;
-imm_gen DUT7(.clk(clk), .n_rst(n_rst),
+imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */s
     .instr(instr),
     .imm_out(imm_out)
 );

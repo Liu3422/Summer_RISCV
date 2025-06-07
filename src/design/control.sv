@@ -38,12 +38,12 @@ module control(
               LOAD  = 7'b0000011,
               ITYPE = 7'b0010011;
     always_comb begin //note: MemRead is not implemented yet.
+        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001; //default/common case
         case(instr)
         BEQ: {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10100; //how to raise "Zero" for BEQ? Review how ALU behaves during B-type
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
         LOAD: {MemtoReg, ALUSrc} = 3'b110;
-        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001;
         endcase
     end
     assign MemRead = 0;
