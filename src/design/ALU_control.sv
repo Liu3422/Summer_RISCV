@@ -32,14 +32,14 @@ module ALU_control( //strictly combinational?
 
     always_comb begin
         case(ALU_Op)
-        00: assign ALU_Operation = ADD;
-        01: assign ALU_Operation = SUB;
+        00: ALU_Operation = ADD;
+        01: ALU_Operation = SUB;
         10: begin
             case(instr)
-            0000: assign ALU_Operation = ADD;
-            1000: assign ALU_Operation = SUB;
-            0111: assign ALU_Operation = AND;
-            0110: assign ALU_Operation = OR;
+            0000: ALU_Operation = ADD;
+            1000: ALU_Operation = SUB;
+            0111: ALU_Operation = AND;
+            0110: ALU_Operation = OR;
             endcase
         end
         endcase

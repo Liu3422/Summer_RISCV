@@ -27,11 +27,11 @@ module ALU(
     );
     always_comb begin
         case (ALU_Operation)
-            0000: assign out = rd1 & rd2;
-            0001: assign out = rd1 | rd2;
-            0010: assign out = rd1 + rd2;
-            0110: assign out = rd1 - rd2;
-            default: assign out = 0; //undefined region of operation
+            0000: out = rd1 & rd2;
+            0001: out = rd1 | rd2;
+            0010: out = rd1 + rd2;
+            0110: out = rd1 - rd2;
+            default: out = 0; //undefined region of operation
         endcase    
     end
 endmodule

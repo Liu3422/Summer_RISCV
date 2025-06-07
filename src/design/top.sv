@@ -37,6 +37,7 @@ end
 logic beq_cond, PCSrc, zero;
 
 assign beq_cond = PCSrc & zero;
+assign zero = (rd1 == rd2);
 
 always_comb begin
     if(beq_cond) 
@@ -46,17 +47,15 @@ always_comb begin
 end
 
 logic [31:0] instr; 
-fetch_reg_file DUT1 (
-    .clk(clk),
-    .n_rst(n_rst),
+fetch_reg_file DUT1 (.clk(clk), .n_rst(n_rst),
     .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
     .instr(instr)
 );
 
-logic PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoREg; //Control signals
+logic PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
 control DUT2 (
-    .clk(clk), 
-    .n_rst(n_rst),
+    // .clk(clk), 
+    // .n_rst(n_rst),
     .instr(instr[6:0]),
     .PCSrc(PCSrc),
     .RegWr(RegWr),
@@ -68,9 +67,7 @@ control DUT2 (
 
 logic [31:0] writeback; //output from execute/writeback reg file
 logic [31:0] rd1, rd2;
-decode_reg_file DUT3 (
-    .clk(clk),
-    .n_rst(n_rst),
+decode_reg_file DUT3 (.clk(clk), .n_rst(n_rst),
     .RegWr(RegWr),
     .read_reg1(instr[19:15]),
     .read_reg2(instr[24:20]),
@@ -98,9 +95,7 @@ ALU_control DUT5 (
 );
 
 logic [31:0] execute_data; //data memory
-execute_reg_file DUT6(
-    .clk(clk),
-    .n_rst(n_rst),
+execute_reg_file DUT6(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
     .ALU_Out(ALU_Out),
@@ -109,9 +104,7 @@ execute_reg_file DUT6(
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
 
 logic [11:0] imm_out;
-imm_gen DUT7(
-    .clk(clk),
-    .n_rst(n_rst),
+imm_gen DUT7(.clk(clk), .n_rst(n_rst),
     .instr(instr),
     .imm_out(imm_out)
 );
