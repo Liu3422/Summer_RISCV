@@ -25,4 +25,23 @@ module ALU_control( //strictly combinational?
     input logic [1:0] ALUOp,
     output logic [3:0] ALU_Operation
     );
+    parameter [3:0] ADD = 4'b0010,
+                    SUB = 4'b0110,
+                    AND = 4'b0000,
+                    OR = 4'b0001;
+
+    always_comb begin
+        case(ALU_Op)
+        00: assign ALU_Operation = ADD;
+        01: assign ALU_Operation = SUB;
+        10: begin
+            case(instr)
+            0000: assign ALU_Operation = ADD;
+            1000: assign ALU_Operation = SUB;
+            0111: assign ALU_Operation = AND;
+            0110: assign ALU_Operation = OR;
+            endcase
+        end
+        endcase
+    end
 endmodule
