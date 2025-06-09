@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 06/03/2025 09:45:34 PM
+// Create Date: 06/03/2025 09:45:54 PM
 // Design Name: 
-// Module Name: decode_reg_file
+// Module Name: execute_reg_file
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,29 +20,29 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module decode_reg_file(
-    input logic clk, n_rst, RegWr,
-    input logic [4:0] read_reg1, read_reg2, write_reg,
-    input logic [31:0] write_data,
-    output logic [31:0] rd1, rd2
+module memory_reg_file(
+    input logic clk, n_rst, MemWr, MemRead,
+    input logic [31:0] addr, write_data,
+    output logic [31:0] execute_data
     );
-    logic [31:0] RF [31:0]; //32 registers, each 32 bits long.
+    logic [31:0] memory_data [31:0];
     logic [31:0] out;
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
-            RF[write_reg] <= 32'b0;
+            execute_data <= 32'b0;
         end
-        else 
-            RF[write_reg] <= out; 
-    end
-    always_comb begin
-        if(RegWr)
-            out = write_data;
-        else
-            out = RF[write_reg]; //do nothing
+        else begin
+            execute_data <= out;
+        end
     end
 
-    assign rd1 = RF[read_reg1];
-    assign rd2 = RF[read_reg2];
+    always_comb begin 
+        if(MemWr) 
+            out = write_data;
+        else if(MemRead)
+            out = memory_data[addr];
+        else //edge case?
+            out = 0;
+    end
 endmodule

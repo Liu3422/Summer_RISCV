@@ -35,15 +35,15 @@ always_ff @(posedge clk, negedge n_rst) begin //does it need to be outside of mo
 end
 
 logic beq_cond, PCSrc, zero;
-
+logic [11:0] imm_out;
 assign beq_cond = PCSrc & zero;
-assign zero = (ALU_out == 32'b0); // zero is raised
+// assign zero = (ALU_Out == 32'b0); // zero is raised
 
 always_comb begin
     if(beq_cond) 
-        PC_next = PC + imm_gen;
+        PC_Next = PC + imm_out;
     else
-        PC_next = PC + 4;
+        PC_Next = PC + 4;
 end
 
 logic [31:0] instr; 
@@ -52,7 +52,7 @@ fetch_reg_file DUT1 (.clk(clk), .n_rst(n_rst),
     .instr(instr)
 );
 
-logic PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
+logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
 control DUT2 (
     // .clk(clk), 
     // .n_rst(n_rst),
@@ -62,7 +62,8 @@ control DUT2 (
     .ALUSrc(ALUSrc),
     .MemWr(MemWr),
     .MemRead(MemRead),
-    .MemtoReg(MemtoReg)
+    .MemtoReg(MemtoReg),
+    .ALUOp(ALUOp)
 );
 
 logic [31:0] writeback; //output from execute/writeback reg file
@@ -80,14 +81,15 @@ decode_reg_file DUT3 (.clk(clk), .n_rst(n_rst),
 logic [3:0] ALU_Operation; //output from ALU_control
 logic [31:0] ALU_Out, ALU_in2; //ALU_in2 is from mux of rd2 or imm_gen
 ALU DUT4 (  //combinational?
-    .ALUOperation(ALU_Operation),
+    .ALU_Operation(ALU_Operation),
     .rd1(rd1),
     .rd2(ALU_in2),
-    .out(ALU_Out)
+    .out(ALU_Out),
+    .zero(zero)
 );
 assign ALU_in2 = (ALUSrc) ? imm_out : rd2; 
 
-
+logic [1:0] ALUOp;
 ALU_control DUT5 (
     .instr({instr[30], instr[14:12]}),
     .ALUOp(ALUOp),
@@ -95,16 +97,17 @@ ALU_control DUT5 (
 );
 
 logic [31:0] execute_data; //data memory
-execute_reg_file DUT6(.clk(clk), .n_rst(n_rst),
+memory_reg_file DUT6(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
-    .ALU_Out(ALU_Out),
-    .write_data(execute_data)
+    .addr(ALU_Out),
+    .write_data(rd2),
+    .execute_data(execute_data)
 );
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
 
-logic [11:0] imm_out;
-imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */s
+// logic [11:0] imm_out;
+imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */
     .instr(instr),
     .imm_out(imm_out)
 );

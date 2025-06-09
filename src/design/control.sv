@@ -44,6 +44,7 @@ module control(
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
         LOAD: {MemtoReg, ALUSrc} = 3'b110;
+        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001; //default/common case
         endcase
     end
     assign MemRead = 0;

@@ -23,8 +23,10 @@
 module ALU(
     input logic [3:0] ALU_Operation,
     input logic [31:0] rd1, rd2,
-    output logic [31:0] out
+    output logic [31:0] out,
+    output logic zero
     );
+    assign zero = (out == 0);
     always_comb begin
         case (ALU_Operation)
             0000: out = rd1 & rd2;
