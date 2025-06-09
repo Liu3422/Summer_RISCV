@@ -28,7 +28,7 @@ module imm_gen( //without swizzle
     parameter I = 7'b0010011,
               S = 7'b0100011,
               B = 7'b1100011,
-              JAL = 7'b1101111;
+              JAL = 7'b1101111,
               JALR = 7'b1100111; 
               //U is both 0110111 and 0010111
     always_comb begin
