@@ -22,7 +22,7 @@
 
 module top(
     input logic clk, n_rst
-    );
+    ); 
 
 logic [31:0] PC;
 logic [31:0] PC_Next;

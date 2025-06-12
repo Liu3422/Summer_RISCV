@@ -28,18 +28,11 @@ module tb_ALU();
                     AND = 4'b0000,
                     OR = 4'b0001;
 
-    ALU DUT (.clk(clk), .n_rst(n_rst), .rd1(rd1), .rd2(rd2), .ALU_Operation(ALU_Operation), .out(out));
-    
-endmodule
-
-/* 337-style testbench
-    localparam CLK_PERIOD = 10ns;
-
-    logic clk, n_rst;
+    logic clk, n_rst, zero;
     logic [3:0] ALU_Operation;
     logic [31:0] rd1, rd2, out;
 
-    ALU DUT (.clk(clk), .n_rst(n_rst), .ALU_Operation(ALU_Operation), .out(out));
+    ALU DUT (.rd1(rd1), .rd2(rd2), .ALU_Operation(ALU_Operation), .out(out), .zero(zero));
 
     typedef struct {
         logic [3:0] ALU_Operation;
@@ -69,11 +62,11 @@ endmodule
     end
     endtask
 
-    task ALU_test_gen;
+    task ALU_test_gen; //general case.
         input logic [3:0] tv_ALU_Operation;
         input logic [31:0] tv_rd1, tv_rd2;
         input logic [31:0] exp_out;
-        input int idx
+        input int idx;
     begin
         test[idx].ALU_Operation = tv_ALU_Operation;
         test[idx].rd1 = tv_rd1;
@@ -82,16 +75,85 @@ endmodule
     end
     endtask
 
+    task ALU_test_add; //add
+        input logic [31:0] tv_rd1, tv_rd2;
+        input int idx;
+    begin
+        test[idx].ALU_Operation = ADD;
+        test[idx].rd1 = tv_rd1;
+        test[idx].rd2 = tv_rd2;
+        test[idx].out = tv_rd1 + tv_rd2; 
+    end
+    endtask
+
+    task ALU_test_sub; //sub
+        input logic [31:0] tv_rd1, tv_rd2;
+        input int idx;
+    begin
+        test[idx].ALU_Operation = SUB;
+        test[idx].rd1 = tv_rd1;
+        test[idx].rd2 = tv_rd2;
+        test[idx].out = tv_rd1 - tv_rd2; 
+    end
+    endtask        
+
+    task ALU_test_and; //and
+        input logic [31:0] tv_rd1, tv_rd2;
+        input int idx;
+    begin
+        test[idx].ALU_Operation = AND;
+        test[idx].rd1 = tv_rd1;
+        test[idx].rd2 = tv_rd2;
+        test[idx].out = tv_rd1 & tv_rd2; 
+    end
+    endtask
+
+    task ALU_test_or; //or
+        input logic [31:0] tv_rd1, tv_rd2;
+        input int idx;
+    begin
+        test[idx].ALU_Operation = OR;
+        test[idx].rd1 = tv_rd1;
+        test[idx].rd2 = tv_rd2;
+        test[idx].out = tv_rd1 | tv_rd2; 
+    end
+    endtask
+    
     initial begin
         rd1 = 0;
         rd2 = 0;
         ALU_Operation = 0;
 
         n_rst = 1;
-        test = new[4];
+        test = new[7];
 
         reset_dut;
-    end */
+        @(posedge clk);
+
+        ALU_test_gen(ADD, 32'b1, 32'b1, 32'b10, 0);
+        ALU_test_gen(ADD, 32'd2, 32'd2, 32'd4, 1);
+        ALU_test_add(32'd123894, 32'd2479, 2);
+        ALU_test_sub(32'd1293, 32'd192, 3);
+        ALU_test_sub(32'd143, 32'd1293, 4);
+        ALU_test_and(32'b110011, 32'b100011, 5);
+        ALU_test_or(32'b110100, 32'b111001, 6);
+
+        for(int i = 0; i < 7; i++) begin
+            rd1 = test[i].rd1;
+            rd2 = test[i].rd2;
+            ALU_Operation = test[i].ALU_Operation;
+
+            @(posedge clk);
+
+            if (test[i].out != out) 
+                $display("Output is wrong %d. exp: %d actual: %d", i, test[i].out, out);
+
+        end
+        $finish;
+    end 
+    
+endmodule
+
 
 
 /* proxy-driven testbench

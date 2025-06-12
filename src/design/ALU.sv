@@ -29,10 +29,10 @@ module ALU(
     assign zero = (out == 0);
     always_comb begin
         case (ALU_Operation)
-            0000: out = rd1 & rd2;
-            0001: out = rd1 | rd2;
-            0010: out = rd1 + rd2;
-            0110: out = rd1 - rd2;
+            4'b0000: out = rd1 & rd2;
+            4'b0001: out = rd1 | rd2;
+            4'b0010: out = rd1 + rd2;
+            4'b0110: out = rd1 - rd2;
             default: out = 0; //undefined region of operation
         endcase    
     end
