@@ -25,7 +25,7 @@ module memory_reg_file(
     input logic [31:0] addr, write_data,
     output logic [31:0] execute_data
     );
-    logic [31:0] memory_data [31:0];
+    logic [31:0] data_memory [31:0];
     logic [31:0] out;
 
     always_ff @(posedge clk, negedge n_rst) begin
@@ -41,7 +41,7 @@ module memory_reg_file(
         if(MemWr) 
             out = write_data;
         else if(MemRead)
-            out = memory_data[addr];
+            out = data_memory[addr];
         else //edge case?
             out = 0;
     end

@@ -25,14 +25,14 @@ module fetch_reg_file(
     input logic [31:0] PC,
     output logic [31:0] instr
     );
-    logic [31:0] instruction_data [31:0] ;
+    logic [31:0] instruction_memory [31:0];
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
             instr <= 0;
         end
         else begin
-            instr <= instruction_data[PC];
+            instr <= instruction_memory[PC];
         end
     end                
 endmodule

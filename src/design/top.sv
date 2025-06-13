@@ -47,7 +47,7 @@ always_comb begin
 end
 
 logic [31:0] instr; 
-fetch_reg_file DUT1 (.clk(clk), .n_rst(n_rst),
+fetch_reg_file DUT_instr (.clk(clk), .n_rst(n_rst),
     .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
     .instr(instr)
 );
@@ -68,7 +68,7 @@ control DUT2 (
 
 logic [31:0] writeback; //output from execute/writeback reg file
 logic [31:0] rd1, rd2;
-decode_reg_file DUT3 (.clk(clk), .n_rst(n_rst),
+decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
     .RegWr(RegWr),
     .read_reg1(instr[19:15]),
     .read_reg2(instr[24:20]),
@@ -97,7 +97,7 @@ ALU_control DUT5 (
 );
 
 logic [31:0] execute_data; //data memory
-memory_reg_file DUT6(.clk(clk), .n_rst(n_rst),
+memory_reg_file DUT_Data(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
     .addr(ALU_Out),

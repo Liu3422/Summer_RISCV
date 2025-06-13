@@ -146,7 +146,7 @@ module tb_ALU();
             @(posedge clk);
 
             if (test[i].out != out) 
-                $display("Output is wrong %d. exp: %d actual: %d", i, test[i].out, out);
+                $display("Output is wrong %d. exp: %d actual: %d", i, test[i].out, DUT.out);
 
         end
         $finish;
