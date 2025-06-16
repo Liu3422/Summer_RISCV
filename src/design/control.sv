@@ -32,7 +32,7 @@ module control(
     MemtoReg, // write data input is:  0: ALU. 1:data memory
     output logic [1:0] ALUOp
     );
-    parameter BEQ   = 7'b1100011, 
+    parameter BEQ   = 7'b1100011, //also bne
               RTYPE = 7'b0110011,
               STORE = 7'b0100011,
               LOAD  = 7'b0000011,
@@ -40,7 +40,7 @@ module control(
     always_comb begin //note: MemRead is not implemented yet.
         {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001; //default/common case
         case(instr)
-        BEQ: {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10100; //how to raise "Zero" for BEQ? Review how ALU behaves during B-type
+        BEQ: {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
         LOAD: {MemtoReg, ALUSrc} = 3'b110;

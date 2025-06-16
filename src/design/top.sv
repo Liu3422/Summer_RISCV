@@ -34,13 +34,14 @@ always_ff @(posedge clk, negedge n_rst) begin //does it need to be outside of mo
         PC <= PC_Next; 
 end
 
-logic beq_cond, PCSrc, zero;
-logic [11:0] imm_out;
-assign beq_cond = PCSrc & zero;
+logic beq_cond, bne_cond, PCSrc, zero;
+logic [31:0] imm_out;
+assign beq_cond = (PCSrc & zero) & (funct3 == 3'b000); //zero is raised when alu_out == 0
+assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when alu_out != 0, for bne instr
 // assign zero = (ALU_Out == 32'b0); // zero is raised
 
 always_comb begin
-    if(beq_cond) 
+    if(beq_cond | bne_cond) 
         PC_Next = PC + imm_out;
     else
         PC_Next = PC + 4;
@@ -90,8 +91,10 @@ ALU DUT4 (  //combinational?
 assign ALU_in2 = (ALUSrc) ? imm_out : rd2; 
 
 logic [1:0] ALUOp;
+logic [2:0] funct3;
+assign funct3 = instr[14:12];
 ALU_control DUT5 (
-    .instr({instr[30], instr[14:12]}),
+    .instr({instr[30], funct3}),
     .ALUOp(ALUOp),
     .ALU_Operation(ALU_Operation)
 );

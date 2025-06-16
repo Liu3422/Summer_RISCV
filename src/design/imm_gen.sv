@@ -23,7 +23,7 @@
 module imm_gen( //without swizzle. INCOMPLETE!!!
     // input logic clk, n_rst,
     input logic [31:0] instr,
-    output logic [11:0] imm_out
+    output logic [31:0] imm_out
     );
     parameter I  = 7'b0010011,
               S  = 7'b0100011,
@@ -31,12 +31,14 @@ module imm_gen( //without swizzle. INCOMPLETE!!!
               UJ = 7'b1101111,
               JALR = 7'b1100111,
               U  = 7'b0110111; //no auipc
+    logic sign_ext;
+    assign sign_ext = instr[31];
     always_comb begin
         case(instr[6:0]) //opcode
-            I: imm_out = {instr[31:20]};
-            JALR: imm_out = {instr[31:20]}; //in I format?
-            S: imm_out = {instr[31:25], instr[11:7]};
-            SB: imm_out = {instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
+            I: imm_out = {{20{sign_ext}}, instr[31:20]}; //sign extension
+            JALR: imm_out = {{20{sign_ext}}, instr[31:20]}; //in I format?
+            S: imm_out = {{20{sign_ext}}, instr[31:25], instr[11:7]};
+            SB: imm_out = {{19{sign_ext}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
             UJ: imm_out ={instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
             U: imm_out = 0;
             default: imm_out = 0; //edge case?
