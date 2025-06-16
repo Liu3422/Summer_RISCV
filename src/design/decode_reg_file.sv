@@ -31,7 +31,9 @@ module decode_reg_file(
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
-            RF[write_reg] <= 32'b0;
+            for(int i = 0; i < 32; i++) begin //will this all be done in one clk cycle?
+                RF[i] <= '0;
+            end
         end
         else 
             RF[write_reg] <= out; 
@@ -40,7 +42,7 @@ module decode_reg_file(
         if(RegWr)
             out = write_data;
         else
-            out = RF[write_reg]; //do nothing
+            out = RF[write_reg]; //do nothing. Do I even need this line?
     end
 
     assign rd1 = RF[read_reg1];

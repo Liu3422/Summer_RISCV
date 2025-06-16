@@ -36,8 +36,8 @@ module imm_gen( //without swizzle. INCOMPLETE!!!
             I: imm_out = {instr[31:20]};
             JALR: imm_out = {instr[31:20]}; //in I format?
             S: imm_out = {instr[31:25], instr[11:7]};
-            SB: imm_out = {instr[30:24], instr[11:8], instr[0]};
-            UJ: imm_out ={instr[22:12],instr[0]};
+            SB: imm_out = {instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
+            UJ: imm_out ={instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
             U: imm_out = 0;
             default: imm_out = 0; //edge case?
         endcase

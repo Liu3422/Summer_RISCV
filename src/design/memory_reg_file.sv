@@ -20,12 +20,14 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module memory_reg_file(
+module memory_reg_file#(
+    parameter NUM_WORDS = 32
+    ) (
     input logic clk, n_rst, MemWr, MemRead,
     input logic [31:0] addr, write_data,
     output logic [31:0] execute_data
     );
-    logic [31:0] data_memory [31:0];
+    logic [31:0] data_memory [NUM_WORDS:0];
     logic [31:0] out;
 
     always_ff @(posedge clk, negedge n_rst) begin
@@ -38,8 +40,10 @@ module memory_reg_file(
     end
 
     always_comb begin 
-        if(MemWr) 
+        if(MemWr) begin
             out = write_data;
+            data_memory[addr] = write_data; //does this line work?
+        end
         else if(MemRead)
             out = data_memory[addr];
         else //edge case?
