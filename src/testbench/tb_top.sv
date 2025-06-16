@@ -36,7 +36,15 @@ module tb_top ();
 
         for(int i = 0; i < 7; i++) begin
             @(posedge clk);
-        end
+        end //NOTE: if you adjust the same register and check for the first change AFTER you run the full program, it would (incorrectly) print an error.
+        if(DUT.DUT_RF.RF[1][31:0] != 32'd10)
+            $display("addi x1, x0, 10 incorrect");
+        if(DUT.DUT_RF.RF[2][31:0] != 32'd5)
+            $display("addi x2, x0, 5 incorrect");
+        if(DUT.DUT_RF.RF[3][31:0] != 32'd15)
+            $display("add x2, x1, x2 incorrect");
+        if(DUT.DUT_RF.RF[4][31:0] != 32'd5)
+            $display("sub x4, x1, x2 incorrect");            
         $display("Test 1 complete");
         
         //test 2, featuring addi, sw, lw
@@ -46,6 +54,14 @@ module tb_top ();
         for(int i = 0; i < 7; i++) begin
             @(posedge clk);
         end
+        if(DUT.DUT_RF.RF[1][31:0] != 32'd100)
+            $display("addi x1, x0, 100 incorrect");
+        if(DUT.DUT_Data.data_memory[0] != 32'd100)
+            $display("sw x1, 0(x0) incorrect");
+        if(DUT.DUT_RF.RF[2] != 32'd100)
+            $display("lw x2, 0(x0) incorrect");
+        if(DUT.DUT_RF.RF[3] != 32'd101)
+            $display("addi x3, x2, 1 incorrect");
         $display("Test 2 complete");
         
         //test 3, featuring addi, bne
@@ -55,6 +71,8 @@ module tb_top ();
         for(int i = 0; i < 20; i++) begin
             @(posedge clk);
         end
+        if(DUT.DUT_RF.RF[1] != 32'd5)
+            $display("counter doesn't equal 5");
         $display("Test 3 complete");
 
         $finish;

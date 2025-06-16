@@ -39,10 +39,20 @@ module memory_reg_file#(
         end
     end
 
+    always_ff @(posedge clk, negedge n_rst) begin
+        if(!n_rst) begin
+            for(int i = 0; i < NUM_WORDS; i++) begin
+                data_memory[i] <= 32'b0;
+            end
+        end
+        else if(MemWr) 
+            data_memory[addr] <= write_data;
+    end
+
     always_comb begin 
         if(MemWr) begin
             out = write_data;
-            data_memory[addr] = write_data; //does this line work?
+            // data_memory[addr] = write_data; //does this line work?
         end
         else if(MemRead)
             out = data_memory[addr];
