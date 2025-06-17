@@ -27,7 +27,8 @@ module top(
 logic [31:0] PC;
 logic [31:0] PC_Next;
 
-always_ff @(negedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
+always_ff @(posedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
+//update: negedge would fix the branching issue (branches to PC that's one step ahead, thus incorrect instruction), but breaks the general case.
     if(!n_rst) 
         PC <= 0;
     else
@@ -42,7 +43,7 @@ assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when al
 
 always_comb begin
     if(beq_cond | bne_cond) 
-        PC_Next = PC + {{24{imm_out[11]}}, imm_out[11:0]}; //sign extension for signed imm_out
+        PC_Next = PC + ({{24{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out. 
     else
         PC_Next = PC + 4;
 end
@@ -88,7 +89,7 @@ ALU DUT4 (  //combinational?
     .out(ALU_Out),
     .zero(zero)
 );
-assign ALU_in2 = (ALUSrc) ? imm_out : rd2; 
+assign ALU_in2 = (ALUSrc) ? {{24{imm_out[11]}}, imm_out[11:0]} : rd2; 
 
 logic [1:0] ALUOp;
 logic [2:0] funct3;
