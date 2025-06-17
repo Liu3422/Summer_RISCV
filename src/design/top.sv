@@ -27,7 +27,7 @@ module top(
 logic [31:0] PC;
 logic [31:0] PC_Next;
 
-always_ff @(posedge clk, negedge n_rst) begin //does it need to be outside of module, since feeding Next_PC back into program_counter.sv is weird?
+always_ff @(negedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
     if(!n_rst) 
         PC <= 0;
     else
@@ -42,7 +42,7 @@ assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when al
 
 always_comb begin
     if(beq_cond | bne_cond) 
-        PC_Next = PC + imm_out;
+        PC_Next = PC + {{24{imm_out[11]}}, imm_out[11:0]}; //sign extension for signed imm_out
     else
         PC_Next = PC + 4;
 end
