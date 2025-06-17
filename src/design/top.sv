@@ -26,6 +26,7 @@ module top(
 
 logic [31:0] PC;
 logic [31:0] PC_Next;
+logic [31:0] instr; 
 
 always_ff @(posedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
 //update: negedge would fix the branching issue (branches to PC that's one step ahead, thus incorrect instruction), but breaks the general case.
@@ -36,7 +37,9 @@ always_ff @(posedge clk, negedge n_rst) begin //updates on negative edge of clk,
 end
 
 logic beq_cond, bne_cond, PCSrc, zero;
-logic [31:0] imm_out;
+logic [2:0] funct3;
+/* synthesis keep */ logic [31:0] imm_out; //synthesis directive
+assign funct3 = instr[14:12];
 assign beq_cond = (PCSrc & zero) & (funct3 == 3'b000); //zero is raised when alu_out == 0
 assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when alu_out != 0, for bne instr
 // assign zero = (ALU_Out == 32'b0); // zero is raised
@@ -48,13 +51,14 @@ always_comb begin
         PC_Next = PC + 4;
 end
 
-logic [31:0] instr; 
 fetch_reg_file #(.NUM_INSTR(32)) DUT_instr (.clk(clk), .n_rst(n_rst),
     .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
     .instr(instr)
 );
 
 logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
+logic [1:0] ALUOp;
+
 control DUT2 (
     // .clk(clk), 
     // .n_rst(n_rst),
@@ -91,9 +95,6 @@ ALU DUT4 (  //combinational?
 );
 assign ALU_in2 = (ALUSrc) ? {{24{imm_out[11]}}, imm_out[11:0]} : rd2; 
 
-logic [1:0] ALUOp;
-logic [2:0] funct3;
-assign funct3 = instr[14:12];
 ALU_control DUT5 (
     .instr({instr[30], funct3}),
     .ALUOp(ALUOp),
@@ -109,7 +110,7 @@ memory_reg_file #(.NUM_WORDS(32)) DUT_Data(.clk(clk), .n_rst(n_rst),
     .execute_data(execute_data)
 );
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
-
+// assign upper_imm = imm_out[31:12]; //getting rid of warning
 // logic [11:0] imm_out;
 imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */
     .instr(instr),
