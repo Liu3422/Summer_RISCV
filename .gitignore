@@ -25,6 +25,7 @@
 *.sdk/
 vivado_project/
 Summer_RV32I/
+RV32I_FPGA/
 
 # OS/editor stuff
 .DS_Store
