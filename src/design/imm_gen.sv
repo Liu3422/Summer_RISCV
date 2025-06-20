@@ -35,13 +35,13 @@ module imm_gen( //without swizzle. INCOMPLETE!!!
     // assign sign_ext = instr[31];
     always_comb begin
         case(instr[6:0]) //opcode
-            I: imm_out    = {{24{instr[31]}}, instr[31:20]}; //sign extension
-            S: imm_out    = {{24{instr[31]}}, instr[31:25], instr[11:7]};
-            SB: imm_out   = {{24{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
+            I: imm_out    = {{20{instr[31]}}, instr[31:20]}; //sign extension
+            S: imm_out    = {{20{instr[31]}}, instr[31:25], instr[11:7]};
+            SB: imm_out   = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
             UJ: imm_out   = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:25], instr[11:8], 1'b0};
-            JALR: imm_out = {instr[20], instr[30:25], instr[11:8], 1'b0}; //Unconditional Jump
+            JALR: imm_out = {{20{instr[31]}}, instr[20], instr[30:25], instr[11:8], 1'b0}; //Unconditional Jump
             U: imm_out    = {instr[31:12], 12'b0};
-            default: imm_out = 12'b0; //edge case?
+            default: imm_out = 32'b0; //edge case?
         endcase
     end
 endmodule

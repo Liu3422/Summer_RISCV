@@ -38,14 +38,13 @@ module control(
               LOAD  = 7'b0000011,
               ITYPE = 7'b0010011;
     always_comb begin //note: MemRead is not implemented yet.
-        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001; //default/common case
+        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead} = 8'b01000010; //default/common case
         case(instr)
         BEQ: {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
-        LOAD: {MemtoReg, ALUSrc} = 3'b110;
-        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr} = 8'b0100001; //default/common case
+        LOAD: {MemtoReg, ALUSrc, MemRead} = 3'b110;
+        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead} = 8'b01000010; //default/common case
         endcase
     end
-    assign MemRead = 0;
 endmodule

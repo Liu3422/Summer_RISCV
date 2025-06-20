@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 05/31/2025 04:17:16 PM
+// Create Date: 06/20/2025 05:10:43 PM
 // Design Name: 
-// Module Name: top
+// Module Name: RV32I_core
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,23 +20,24 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module top(
-    input logic clk, n_rst
-    ); 
+module RV32I_core(
+    input logic clk, n_rst,
+    input logic [31:0] instr,
+    output logic [31:0] PC_Next, 
+    writeback //output from execute/writeback reg file
+);
 
-logic [31:0] PC;
+logic [31:0] PC; 
 logic [31:0] PC_Next;
-logic [31:0] instr; 
-// logic n_rst;
-// assign n_rst = n_rst1 | CPU_RESET; //trying C12 button on Nexys A7
+// logic [31:0] instr; 
 
-always_ff @(posedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
-//update: negedge would fix the branching issue (branches to PC that's one step ahead, thus incorrect instruction), but breaks the general case.
+always_ff @(posedge clk, negedge n_rst) begin
     if(!n_rst) 
         PC <= 0;
     else
         PC <= PC_Next; 
 end
+
 
 logic beq_cond, bne_cond, PCSrc, zero;
 logic [2:0] funct3;
@@ -53,10 +54,7 @@ always_comb begin
         PC_Next = PC + 4;
 end
 
-fetch_reg_file #(.NUM_INSTR(32)) DUT_instr (.clk(clk), .n_rst(n_rst),
-    .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
-    .instr(instr)
-);
+
 
 logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
 logic [1:0] ALUOp;
@@ -74,7 +72,7 @@ control DUT2 (
     .ALUOp(ALUOp)
 );
 
-logic [31:0] writeback; //output from execute/writeback reg file
+// logic [31:0] writeback; //output from execute/writeback reg file
 logic [31:0] rd1, rd2;
 decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
     .RegWr(RegWr),
@@ -118,8 +116,4 @@ imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */
     .instr(instr),
     .imm_out(imm_out)
 );
-
-// assign LED = ALU_Out[15:0];
 endmodule
-
-
