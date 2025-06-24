@@ -24,6 +24,4 @@ MODULE = verification.test_top
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
 log:
-	$(MAKE) -c verification \
-		SIM=$(SIM) MODULE=test_top \
-		> verification/results.log 2>&1
+	$(MAKE) > verification/results.log 2>&1
