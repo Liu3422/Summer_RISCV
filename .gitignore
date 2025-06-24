@@ -23,9 +23,10 @@
 *.srcs/
 *.xpr
 *.sdk/
-vivado_project/
 Summer_RV32I/
 RV32I_FPGA/
+sim_build/
+__pycache__/
 
 # OS/editor stuff
 .DS_Store
