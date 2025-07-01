@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
 module top (
     input logic clk, n_rst,
-    input logic [15:0] SW,
-    input logic [4:0] BTN,
-    output logic [15:0] LED
+    // input logic [15:0] SW,
+    // input logic [4:0] BTN,
+    // output logic [15:0] LED,
     output logic [7:0] SSEG_CA, SSEG_AN
 
     // output logic RGB1_Blue, RGB1_Green, RGB1_Red, RGB2_Blue, RGB2_Green, RGB2_Red,
@@ -12,7 +12,7 @@ module top (
 
 
 
-logic [31:0] PC_Next, instr;
+logic [31:0] PC_Next, instr, writeback;
 
 RV32I_core DUT_core (.clk(clk), .n_rst(n_rst), 
     .instr(instr), 
@@ -27,12 +27,12 @@ fetch_reg_file #(.NUM_INSTR(32)) DUT_instr (.clk(clk), .n_rst(n_rst), //external
 
 gpio DUT_GPIO (.clk(clk), .n_rst(n_rst),
     //FPGA/peripheral I/O
-    .SW(SW),
-    .BTN(BTN),
-    .LED(LED),
-    .SSEG_AN(SSEG_AN),
-    .SSEG_CA(SSEG_CA),
+    // .SW(SW),
+    // .BTN(BTN),
+    // .LED(LED),
+    .writeback(writeback),
+    .SSEG_AN(SSEG_AN), 
+    .SSEG_CA(SSEG_CA)
     //core inputs
-    .writeback(writeback)
 );
 endmodule

@@ -28,7 +28,7 @@ module RV32I_core(
 );
 
 logic [31:0] PC; 
-logic [31:0] PC_Next;
+// logic [31:0] PC_Next;
 // logic [31:0] instr; 
 
 always_ff @(posedge clk, negedge n_rst) begin
