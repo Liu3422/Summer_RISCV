@@ -142,9 +142,9 @@ class instruction():
         if(self.funct3 != Bits(uint="0", length=3) & self.funct3 != Bits(uint="5", length=3)): #Switches funct7 for invalid instructions
             self.funct7 = Bits(uint="0", length=7)
         if ((self.funct3 == Bits(uint="1", length=3)) | (self.funct3 == Bits(uint="5", length=3))): #avoid illegal instruction: negative shift
-            if(dut_fetch.reg(dut, self.rs2) <= 0):
+            if(dut_fetch.reg(dut, self.rs2) <= 0): #this isn't catching all negative value regs
                 print("Illegal negative shift detected: swapping instruction")
-                self.funct3 = Bits(uint=random.choice([0,1,2,4,6,7]), length=3) #switch to everything other than shift 
+                self.funct3 = Bits(uint=random.choice([0,2,3,4,6,7]), length=3) #switch to everything other than shift 
         self.opcode = Bits(bin="0110011", length=7)
         return self
     
@@ -196,16 +196,15 @@ class instruction():
 
         print(f"Instruction: {(self.bin())}")
                 
-    def model_rd(self, DUT): #returns the expected rd value
-        rd1 = dut_fetch.reg(DUT, self.rs1)
-        rd2 = dut_fetch.reg(DUT, self.rs2)
-        imm = dut_fetch.imm(DUT)
-        
+    def model_rd(self, prior): #returns the expected rd value
+        #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
+        rd1 = prior[1]
         match op_to_type[self.opcode]:
             case "R-Type":
-                field = rd2 
+                field = prior[2]
             case "I-Type": 
-                field = imm
+                field = (self.imm[0:12]).int
+                # field = imm
         try:
             match Rfunct_to_name[self.funct3][0]:
                 case "add":
@@ -215,12 +214,12 @@ class instruction():
                 case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
                 case "sltu": 
                     # rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
-                    imm = dut_fetch.unsigned_imm(DUT)
+                    # imm = dut_fetch.unsigned_imm(DUT)
                     match op_to_type[self.opcode]: #ugly fix for unsigned instruction case
                         case "R-Type":
-                            field = rd2 
+                            field = prior[2]
                         case "I-Type": 
-                            field = imm
+                            field = (self.imm[0:12]).uint
                     return 1 if (rd1 < field) else 0
                 case "xor": return rd1 ^ field
                 case "srl": #NOTE: python's >> is arithmetic
@@ -260,23 +259,14 @@ class instruction():
             print()
             return [rd, rs1]
         
-    async def check(self, expected, actual, dut): #NOTE: not printing for some reason
-        #turned into async def for the reset_dut func
-        # print("Checker:")
-        if (expected.bit_length() > 64):
-            print(f"Severe overflow detected: {expected.bit_length()} bits")
-            await reset_dut(dut)
-        elif((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
-            print(f"Overflow detected: {expected}")
-            await reset_dut(dut)
+    def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
+        print(f"Expected rd: {expected}")
+        if(expected) != (actual[0]):
+            print(f"Instruction Failed")
+            dut_fetch.control(dut)
+            print()
         else:
-            print(f"Expected rd: {expected}")
-            if(expected) != (actual[0]):
-                print(f"Instruction Failed")
-                dut_fetch.control(dut)
-                print()
-            else:
-                print(f"Success! \n")
+            print(f"Success! \n")
         return
         
 # @cocotb.test()
@@ -383,7 +373,7 @@ async def R_I_OOP_test(dut):
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model_rd(dut) #expected rd value
+        expected = instr.model_rd(prior) #expected rd value
         
         print("Actual: ", end="")
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
@@ -398,11 +388,5 @@ async def R_I_OOP_test(dut):
             print(f"Overflow detected: {expected}")
             await reset_dut(dut)
         else:
-            print(f"Expected rd: {expected}")
-            if(expected) != (actual[0]):
-                print(f"Instruction Failed")
-                dut_fetch.control(dut)
-                print()
-            else:
-                print(f"Success! \n")
+            instr.checker(expected, actual, dut)
         
