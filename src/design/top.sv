@@ -73,6 +73,8 @@ control DUT2 (
     .MemtoReg(MemtoReg),
     .ALUOp(ALUOp)
 );
+logic [7:0] debug_control;
+assign debug_control = {PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg, ALUOp};
 
 logic [31:0] writeback; //output from execute/writeback reg file
 logic [31:0] rd1, rd2;

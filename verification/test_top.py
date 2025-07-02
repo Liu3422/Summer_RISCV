@@ -88,6 +88,12 @@ class dut_fetch():
         return DUT.DUT_RF.RF[bits_index.uint].value.signed_integer
     def imm(DUT):
         return DUT.imm_out.value.signed_integer
+    def control(DUT):
+        signals = DUT.debug_control #concate of control sigs
+        print(f"Control: {signals}")
+        print(f"ALUOp: {DUT.ALUOp}")
+        print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
+        # print(f"RegWr: {signals[1]}")
     
 class instruction():
     def __init__(self):
@@ -323,7 +329,9 @@ async def R_I_OOP_test(dut):
             await reset_dut(dut)
         else:
             if(expected) != (actual[0]):
-                print(f"Instruction Failed \n")
+                print(f"Instruction Failed")
+                dut_fetch.control(dut)
+                print()
             else:
                 print(f"Success! \n")
                 

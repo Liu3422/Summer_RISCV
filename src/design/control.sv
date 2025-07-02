@@ -40,10 +40,11 @@ module control(
     always_comb begin //note: MemRead is not implemented yet.
         {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead} = 8'b01000010; //default/common case
         case(instr)
-        BEQ: {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10010; 
+        BEQ  : {PCSrc, ALUSrc, ALUOp, RegWr} = 5'b10010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
-        LOAD: {MemtoReg, ALUSrc, MemRead} = 3'b110;
+        LOAD : {MemtoReg, ALUSrc, MemRead} = 3'b110;
+        ITYPE: {ALUSrc, ALUOp} = 3'b110;
         default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead} = 8'b01000010; //default/common case
         endcase
     end

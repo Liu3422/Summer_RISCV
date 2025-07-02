@@ -31,7 +31,7 @@ module decode_reg_file(
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
-            for(int i = 0; i < 32; i++) begin //will this all be done in one clk cycle?
+            for(int i = 1; i < 32; i++) begin //will this all be done in one clk cycle?
                 RF[i] <= '0;
             end
         end
@@ -39,6 +39,7 @@ module decode_reg_file(
             RF[write_reg] <= out; 
     end
     always_comb begin
+        RF[0] = 32'b0;
         if(RegWr)
             out = write_data;
         else

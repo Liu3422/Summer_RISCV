@@ -21,7 +21,7 @@
 
 
 module fetch_reg_file#(
-    parameter NUM_INSTR=32
+    parameter NUM_INSTR=1024
     ) (
     input logic clk, n_rst,
     input logic [31:0] PC,
