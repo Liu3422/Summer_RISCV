@@ -32,7 +32,7 @@ def signed_to_binary(val):
 def rshift(val, n): return (val % 0x100000000) >> n #logical right shift
 
 async def reset_dut(dut):
-    print("Resetting DUT")
+    print("Resetting DUT \n")
     dut.n_rst.value = 0
     await Timer(10, units="ns")
     await Timer(10, units="ns")
@@ -86,8 +86,12 @@ class dut_fetch():
     #     self.imm = None
     def reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.signed_integer
+    def unsigned_reg(DUT, bits_index):
+        return DUT.DUT_RF.RF[bits_index.uint].value.integer
     def imm(DUT):
         return DUT.imm_out.value.signed_integer
+    def unsigned_imm(DUT):
+        return DUT.imm_out.value.integer
     def control(DUT):
         signals = DUT.debug_control #concate of control sigs
         print(f"Control: {signals}")
@@ -182,11 +186,19 @@ class instruction():
         try:
             match Rfunct_to_name[self.funct3][0]:
                 case "add":
-                    if(self.funct7.uint == 32): return rd1 - field
+                    if((self.funct7.uint == 32) & (op_to_type[self.opcode] == "R-Type")): return rd1 - field
                     else: return rd1 + field 
                 case "sll": return rd1 << field
                 case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
-                case "sltu": return 1 if (rd1 < field) else 0
+                case "sltu": 
+                    rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
+                    imm = dut_fetch.unsigned_imm(DUT)
+                    match op_to_type[self.opcode]: #ugly fix for unsigned instruction case
+                        case "R-Type":
+                            field = rd2 
+                        case "I-Type": 
+                            field = imm
+                    return 1 if (rd1 < field) else 0
                 case "xor": return rd1 ^ field
                 case "srl": #NOTE: python's >> is arithmetic
                     if(self.funct7.uint == 32): return rd1 >> field #arithmetic
@@ -194,8 +206,8 @@ class instruction():
                 case "or": return (rd1 | field)
                 case "and": return (rd1 & field)
                 case default: print(f"Model Error")
-        except:
-            print(f"Error occured on {Rfunct_to_name[self.funct3]}. Probably negative shift error")
+        except Exception as e:
+            print(f"Error occured on {Rfunct_to_name[self.funct3]}. Probably negative shift error \n {e}")
             return 0
             
     def monitor(self, DUT): #currently returns 3 arguments read from DUT
@@ -213,7 +225,7 @@ class instruction():
             print(f"rd={rd}, rs1={rs1}, imm={imm}")
             return [rd, rs1, imm]
         
-# @cocotb.test()
+@cocotb.test()
 #NOTE: This test requires fetch_reg_file/DUT_instr to be commented out, due to race conditions between inserting 
 #the instruction through this testbench and fetching from the instruction
 async def adder_randomized_test(dut):
@@ -230,7 +242,7 @@ async def adder_randomized_test(dut):
     except:
         print("Register file not accessible at this path")
     # """Will consist of only add and addi instructions"""
-    for i in range(10000):
+    for i in range(1000):
         reg1 = random.randint(1, 31) #not using getrandbits to exclude x0
         reg2 = random.randint(1, 31)
         reg_dest = random.randint(1, 31)
@@ -297,11 +309,10 @@ async def adder_randomized_test(dut):
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await reset_dut(dut)
+    # await reset_dut(dut) #uncomment if only running this test
     #Testcase
-    for i in range(100):
+    for i in range(10000):
         test = instruction()
-        # test = instruction.gen_random(test) #constrained random generation
         instr_type = random.choice([0,1])  #randomize instruction type
         if(instr_type == 0):
             instr = test.gen_R()
@@ -323,8 +334,12 @@ async def R_I_OOP_test(dut):
         print(f"Expected rd: {expected}")
         
         print("Actual: ", end="")
-        actual = instr.monitor(dut) #post-instruction rs1, rs2, rd, and/or imm values of DUT        
-        if((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
+        actual = instr.monitor(dut) #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+         
+        if (expected.bit_length() > 64):
+            print(f"Severe overflow detected: {expected.bit_length()} bits")
+            await reset_dut(dut)
+        elif((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
             print(f"Overflow detected: {expected}")
             await reset_dut(dut)
         else:
@@ -334,6 +349,6 @@ async def R_I_OOP_test(dut):
                 print()
             else:
                 print(f"Success! \n")
-                
+
         # actual = instr.monitor(dut)
         

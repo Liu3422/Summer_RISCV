@@ -26,7 +26,7 @@ module decode_reg_file(
     input logic [31:0] write_data,
     output logic [31:0] rd1, rd2
     );
-    logic [31:0] RF [31:0]; //32 registers, each 32 bits long.
+    logic [31:0] RF [31:0]; //32 registers, each 32 bits long. 
     logic [31:0] out;
 
     always_ff @(posedge clk, negedge n_rst) begin
@@ -39,7 +39,7 @@ module decode_reg_file(
             RF[write_reg] <= out; 
     end
     always_comb begin
-        RF[0] = 32'b0;
+        RF[0] = 32'b0; 
         if(RegWr)
             out = write_data;
         else

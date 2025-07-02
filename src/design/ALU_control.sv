@@ -40,7 +40,7 @@ module ALU_control( //strictly combinational?
         case(ALUOp)
         2'b00: ALU_Operation = ADD;
         2'b01: ALU_Operation = SUB;
-        default: begin
+        2'b10: begin //R-types
             case(instr)
             4'b0000: ALU_Operation = ADD;
             4'b1000: ALU_Operation = SUB;
@@ -53,6 +53,31 @@ module ALU_control( //strictly combinational?
             4'b0010: ALU_Operation = SLT;
             4'b0011: ALU_Operation = SLTU;
             default: ALU_Operation = ADD; //default ALU mode
+            endcase
+        end
+        2'b11: begin
+            //I-type instructions have instr[30] high sometimes (except SRL and SLL)
+            case(instr)
+            4'b1000: ALU_Operation = ADD;
+            4'b1111: ALU_Operation = AND;
+            4'b1110: ALU_Operation = OR;
+            4'b1100: ALU_Operation = XOR;
+            4'b0001: ALU_Operation = SLL;
+            4'b0101: ALU_Operation = SRL;
+            4'b1101: ALU_Operation = SRA;
+            4'b1010: ALU_Operation = SLT;
+            4'b1011: ALU_Operation = SLTU;
+
+            4'b0000: ALU_Operation = ADD;
+            4'b0111: ALU_Operation = AND;
+            4'b0110: ALU_Operation = OR;
+            4'b0100: ALU_Operation = XOR;
+            // 4'b0001: ALU_Operation = SLL;
+            // 4'b0101: ALU_Operation = SRL;
+            4'b0101: ALU_Operation = SRA;
+            4'b0010: ALU_Operation = SLT;
+            4'b0011: ALU_Operation = SLTU;
+            default: ALU_Operation = ADD;
             endcase
         end
         endcase
