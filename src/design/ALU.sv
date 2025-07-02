@@ -18,7 +18,16 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
+    parameter [3:0] ADD  = 4'b0010,
+                    SUB  = 4'b0110,
+                    AND  = 4'b0000,
+                    OR   = 4'b0001,
+                    XOR  = 4'b0011,
+                    SLL  = 4'b0100,
+                    SRL  = 4'b0101,
+                    SRA  = 4'b0111,
+                    SLT  = 4'b1000,
+                    SLTU = 4'b1001;
 
 module ALU(
     input logic [3:0] ALU_Operation,
@@ -29,10 +38,16 @@ module ALU(
     assign zero = (out == 0);
     always_comb begin
         case (ALU_Operation)
-            4'b0000: out = rd1 & rd2;
-            4'b0001: out = rd1 | rd2;
-            4'b0010: out = rd1 + rd2;
-            4'b0110: out = rd1 - rd2;
+            AND : out = rd1 & rd2;
+            OR  : out = rd1 | rd2;
+            ADD : out = rd1 + rd2;
+            XOR : out = rd1 ^ rd2;
+            SLL : out = rd1 << rd2;
+            SRL : out = rd1 >> rd2;
+            SUB : out = rd1 - rd2;
+            SRA : out = rd1 >>> rd2; //shift right arithmetic, extends MSB
+            SLT : out = ($signed(rd1) < $signed(rd2)) ? 32'b1 : 32'b0; // signed slt
+            SLTU: out = (rd1 < rd2) ? 32'b1 : 32'b0; 
             default: out = 0; //undefined region of operation
         endcase    
     end

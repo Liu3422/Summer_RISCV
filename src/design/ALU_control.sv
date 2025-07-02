@@ -25,10 +25,16 @@ module ALU_control( //strictly combinational?
     input logic [1:0] ALUOp,
     output logic [3:0] ALU_Operation
     );
-    parameter [3:0] ADD = 4'b0010,
-                    SUB = 4'b0110,
-                    AND = 4'b0000,
-                    OR = 4'b0001;
+    parameter [3:0] ADD  = 4'b0010,
+                    SUB  = 4'b0110,
+                    AND  = 4'b0000,
+                    OR   = 4'b0001,
+                    XOR  = 4'b0011,
+                    SLL  = 4'b0100,
+                    SRL  = 4'b0101,
+                    SRA  = 4'b0111,
+                    SLT  = 4'b1000,
+                    SLTU = 4'b1001;
 
     always_comb begin
         case(ALUOp)
@@ -40,6 +46,12 @@ module ALU_control( //strictly combinational?
             4'b1000: ALU_Operation = SUB;
             4'b0111: ALU_Operation = AND;
             4'b0110: ALU_Operation = OR;
+            4'b0100: ALU_Operation = XOR;
+            4'b0001: ALU_Operation = SLL;
+            4'b0101: ALU_Operation = SRL;
+            4'b1101: ALU_Operation = SRA;
+            4'b0010: ALU_Operation = SLT;
+            4'b0011: ALU_Operation = SLTU;
             default: ALU_Operation = ADD; //default ALU mode
             endcase
         end

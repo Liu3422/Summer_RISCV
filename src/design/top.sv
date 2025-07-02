@@ -53,10 +53,10 @@ always_comb begin
         PC_Next = PC + 4;
 end
 
-fetch_reg_file #(.NUM_INSTR(32)) DUT_instr (.clk(clk), .n_rst(n_rst),
-    .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
-    .instr(instr)
-);
+// fetch_reg_file #(.NUM_INSTR(32)) DUT_instr (.clk(clk), .n_rst(n_rst),
+//     .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
+//     .instr(instr)
+// );
 
 logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
 logic [1:0] ALUOp;
