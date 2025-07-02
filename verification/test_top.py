@@ -39,6 +39,7 @@ async def reset_dut(dut):
     await Timer(10, units="ns")
     dut.n_rst.value = 1
     await Timer(10, units="ns")
+    return
     
 # class testcase:
 #     def __init__(self, instr_type, count, specific_instrs):
@@ -78,6 +79,19 @@ Rfunct_to_name = { #first entry is funct7=0, second is funct7=0x20
     Bits(uint="7", length=3) : ["and", ""]
 }
 
+ALU_Operation_to_name = {
+    int("0010", 2) : "ADD",
+    int("0110", 2) : "SUB",
+    int("0000", 2) : "AND",
+    int("0001", 2) : "OR",
+    int("0011", 2) : "XOR",
+    int("0100", 2) : "SSL",
+    int("0101", 2) : "SLL",
+    int("0111", 2) : "SRA",
+    int("1000", 2) : "SLT",
+    int("1001", 2) : "SLTU"
+}
+
 class dut_fetch():
     # def __init__(self):
     #     self.rd1 = None
@@ -96,6 +110,7 @@ class dut_fetch():
         signals = DUT.debug_control #concate of control sigs
         print(f"Control: {signals}")
         print(f"ALUOp: {DUT.ALUOp}")
+        print(f"ALU_Operation: {ALU_Operation_to_name[DUT.ALU_Operation.value.integer]}")
         print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
         # print(f"RegWr: {signals[1]}")
     
@@ -115,17 +130,21 @@ class instruction():
         self.rs2 = Bits(uint=random.randint(1, 31), length=5) #x1-31 randomly chosen
         self.rd  = Bits(uint=random.randint(1, 31), length=5)
         self.funct3 = Bits(uint=random.getrandbits(3), length=3)
-        self.funct7 = Bits(uint=random.choice([0, 32]), length=7) #32 would only apply to SUB and SRA
+        self.funct7 = Bits(uint=random.choice(["0", "32"]), length=7) #32 would only apply to SUB and SRA
         self.opcode = Bits(uint=random.choice([int("0110011",2), int("0010011",2), int("0000011",2), int("0100011",2), int("1100011",2), 
                                             int("1101111",2), int("1100111",2), int("0110111",2), int("0010111",2), int("1110011",2)]),
                                             length=7)
         self.imm = Bits(int=random.randint(-(2**31), 2**31 - 1), length = 32)
         return self
     
-    def gen_R(self): #generates a random R-type test
+    def gen_R(self, dut): #generates a random R-type test
         self = self.gen_random()
-        if(self.funct3 != Bits(uint=0, length=3) & self.funct3 != Bits(uint=5, length=3)): #Switches funct7 for invalid instructions
-            self.funct7 = Bits(uint=0, length=7)
+        if(self.funct3 != Bits(uint="0", length=3) & self.funct3 != Bits(uint="5", length=3)): #Switches funct7 for invalid instructions
+            self.funct7 = Bits(uint="0", length=7)
+        if ((self.funct3 == Bits(uint="1", length=3)) | (self.funct3 == Bits(uint="5", length=3))): #avoid illegal instruction: negative shift
+            if(dut_fetch.reg(dut, self.rs2) <= 0):
+                print("Illegal negative shift detected: swapping instruction")
+                self.funct3 = Bits(uint=random.choice([0,1,2,4,6,7]), length=3) #switch to everything other than shift 
         self.opcode = Bits(bin="0110011", length=7)
         return self
     
@@ -135,9 +154,9 @@ class instruction():
     def gen_I(self): #generates a random I-type test
         self = self.gen_random()
         self.opcode = Bits(bin="0010011", length=7)
-        if(self.funct3 == Bits(uint=1, length=3)): #valid imm for SLLI
-            self.imm = Bits(uint=0, length=12)
-        elif(self.funct3 == Bits(uint=5, length=3)): #valid imm for SRLI, SRAI
+        if(self.funct3 == Bits(uint="1", length=3)): #valid imm for SLLI
+            self.imm = Bits(uint="0", length=12)
+        elif(self.funct3 == Bits(uint="5", length=3)): #valid imm for SRLI, SRAI
             self.imm = Bits(uint=(random.choice([0,1024]) + random.choice(range(0, 127))), length=12)
         return self
     
@@ -166,6 +185,10 @@ class instruction():
             case "I-Type": #NOTE: sltiu will be printed as sltui    
                 if((self.funct3.uint == 5) & (self.imm.int > 1024)): #srai special case
                     print(f"Name: srai")
+                elif(self.funct3.uint == 3): #sltiu is unsigned
+                    print(f"Name: sltiu")
+                    print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={(self.imm[0:12]).uint}")
+                    return
                 else:
                     print(f"Name: {Rfunct_to_name[self.funct3][0] + "i"}")
                 actual_imm = self.imm[0:12] #sanity check
@@ -191,7 +214,7 @@ class instruction():
                 case "sll": return rd1 << field
                 case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
                 case "sltu": 
-                    rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
+                    # rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
                     imm = dut_fetch.unsigned_imm(DUT)
                     match op_to_type[self.opcode]: #ugly fix for unsigned instruction case
                         case "R-Type":
@@ -210,24 +233,55 @@ class instruction():
             print(f"Error occured on {Rfunct_to_name[self.funct3]}. Probably negative shift error \n {e}")
             return 0
             
-    def monitor(self, DUT): #currently returns 3 arguments read from DUT
-        # prior_rs1 = dut.DUT_RF.RF[reg1].value.signed_integer
-        
+    def monitor(self, DUT, operation): #currently returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
+        #operation: 
+        # "pre" :won't print imm 
+        # "post" :will print imm
         rs1 = dut_fetch.reg(DUT, self.rs1)
         rs2 = dut_fetch.reg(DUT, self.rs2)
+        unsigned_rs2 = dut_fetch.unsigned_reg(DUT, self.rs2)
         rd = dut_fetch.reg(DUT, self.rd)
         imm = dut_fetch.imm(DUT)
+        unsigned_imm = dut_fetch.unsigned_imm(DUT) & 0xFFF
+        
+        if(Rfunct_to_name[self.funct3][0] == "sltu" ): #unsigned conversion case
+            rs2 = unsigned_rs2
+            imm = unsigned_imm
+            
         if (op_to_type[self.opcode] == "R-Type"):
             print(f"rd={rd}, rs1={rs1}, rs2={rs2}")
             return [rd, rs1, rs2]
         elif (op_to_type[self.opcode] == "I-Type"):
-            print(f"rd={rd}, rs1={rs1}, imm={imm}")
-            return [rd, rs1, imm]
+            print(f"rd={rd}, rs1={rs1}", end="")
+            if(operation == "post"): #irrelevant prior imm field ignored
+                print(f", imm={imm}")
+                return [rd, rs1, imm]
+            print()
+            return [rd, rs1]
         
-@cocotb.test()
+    async def check(self, expected, actual, dut): #NOTE: not printing for some reason
+        #turned into async def for the reset_dut func
+        # print("Checker:")
+        if (expected.bit_length() > 64):
+            print(f"Severe overflow detected: {expected.bit_length()} bits")
+            await reset_dut(dut)
+        elif((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
+            print(f"Overflow detected: {expected}")
+            await reset_dut(dut)
+        else:
+            print(f"Expected rd: {expected}")
+            if(expected) != (actual[0]):
+                print(f"Instruction Failed")
+                dut_fetch.control(dut)
+                print()
+            else:
+                print(f"Success! \n")
+        return
+        
+# @cocotb.test()
 #NOTE: This test requires fetch_reg_file/DUT_instr to be commented out, due to race conditions between inserting 
-#the instruction through this testbench and fetching from the instruction
+#the instruction through this testbench and fetching from the instruction. 
 async def adder_randomized_test(dut):
     """Test for adding 2 random numbers, reset on overflow"""
     cocotb.start_soon(generate_clock(dut))
@@ -309,13 +363,13 @@ async def adder_randomized_test(dut):
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
-    # await reset_dut(dut) #uncomment if only running this test
+    await reset_dut(dut) #uncomment if only running this test
     #Testcase
     for i in range(10000):
         test = instruction()
         instr_type = random.choice([0,1])  #randomize instruction type
         if(instr_type == 0):
-            instr = test.gen_R()
+            instr = test.gen_R(dut)
         else:
             instr = test.gen_I()
             
@@ -323,19 +377,20 @@ async def R_I_OOP_test(dut):
         # dut.instr.value = (instr.bin())
         dut.instr.value = int(instr.bin(), 2)
         
-        print("Prior: ", end="")
-        prior = instr.monitor(dut) #prior rs1, rs2, rd, and/or imm values of DUT
+        print("Pre-instruction: ", end="")
+        prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd, and/or imm values of DUT
 
-        
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
         expected = instr.model_rd(dut) #expected rd value
-        print(f"Expected rd: {expected}")
         
         print("Actual: ", end="")
-        actual = instr.monitor(dut) #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+        actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
          
+        #if i want to make this a function, I need to somehow pass in "expected" without triggering ValueError
+        # instr.check(expected, actual, dut)
+        
         if (expected.bit_length() > 64):
             print(f"Severe overflow detected: {expected.bit_length()} bits")
             await reset_dut(dut)
@@ -343,12 +398,11 @@ async def R_I_OOP_test(dut):
             print(f"Overflow detected: {expected}")
             await reset_dut(dut)
         else:
+            print(f"Expected rd: {expected}")
             if(expected) != (actual[0]):
                 print(f"Instruction Failed")
                 dut_fetch.control(dut)
                 print()
             else:
                 print(f"Success! \n")
-
-        # actual = instr.monitor(dut)
         

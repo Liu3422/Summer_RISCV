@@ -74,7 +74,7 @@ module ALU_control( //strictly combinational?
             4'b0100: ALU_Operation = XOR;
             // 4'b0001: ALU_Operation = SLL;
             // 4'b0101: ALU_Operation = SRL;
-            4'b0101: ALU_Operation = SRA;
+            // 4'b0101: ALU_Operation = SRA;
             4'b0010: ALU_Operation = SLT;
             4'b0011: ALU_Operation = SLTU;
             default: ALU_Operation = ADD;
