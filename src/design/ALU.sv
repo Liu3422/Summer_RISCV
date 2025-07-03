@@ -42,12 +42,12 @@ module ALU(
             OR  : out = rd1 | rd2;
             ADD : out = rd1 + rd2;
             XOR : out = rd1 ^ rd2;
-            SLL : out = rd1 << rd2;
-            SRL : out = rd1 >> rd2;
+            SLL : out = rd1 << rd2[4:0];
+            SRL : out = rd1 >> rd2[4:0];
             SUB : out = rd1 - rd2;
-            SRA : out = rd1 >>> rd2; //shift right arithmetic, extends MSB
+            SRA : out = $signed(rd1) >>> rd2[4:0]; //shift right arithmetic, extends MSB
             SLT : out = ($signed(rd1) < $signed(rd2)) ? 32'b1 : 32'b0; // signed slt
-            SLTU: out = ($signed(rd1) < $unsigned(rd2)) ? 32'b1 : 32'b0; 
+            SLTU: out = ($unsigned(rd1) < $unsigned(rd2)) ? 32'b1 : 32'b0; 
             default: out = 0; //undefined region of operation
         endcase    
     end

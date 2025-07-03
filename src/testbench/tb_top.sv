@@ -96,16 +96,17 @@ module tb_top ();
             $display("x2 doesn't equal 3");
         $display("Test 4 complete");
 
-        // //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
-        // $display("Test 5, fibonacci test");
-        // reset_dut;
-        // $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
-        // DUT.DUT_RF.RF[5] = 32'd10; //10th term
-        // for(int i = 0; i < 100; i++) 
-        //     @(posedge clk);
-        // if(DUT.DUT_RF.RF[10] != 32'd55)
-        //     $display("test is wrong");
-        // $display("Test 5 complete");
+        //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
+        $display("Test 5, fibonacci test");
+        reset_dut;
+        $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
+        DUT.DUT_RF.RF[5] = 32'd10; //10th term
+        for(int i = 0; i < 100; i++) 
+            @(posedge clk);
+        if(DUT.DUT_RF.RF[10] != 32'd55)
+            $display("test is wrong");
+        $display("Actual, %d", DUT.DUT_RF.RF[10]);
+        $display("Test 5 complete");
 
         $finish;
     end

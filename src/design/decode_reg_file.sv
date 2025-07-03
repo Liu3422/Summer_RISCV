@@ -37,9 +37,9 @@ module decode_reg_file(
         end
         else 
             RF[write_reg] <= out; 
+        RF[0] <= 32'b0;
     end
     always_comb begin
-        RF[0] = 32'b0; 
         if(RegWr)
             out = write_data;
         else
