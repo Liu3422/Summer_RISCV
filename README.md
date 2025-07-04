@@ -6,14 +6,17 @@ Requirements:
 - Cocotb venv with WSL
 
 Errors:
-- NOTE: DUT/model may not be following RV32I shift immediate instructions specs.
 - model is sometimes wrong on shift instructions 
-- model is not decrementing imm by 1024 on srai
+    - sign is not preserved on right shift
 - DUT is incorrect on sltu when 
     - rd1 > 2^31
+    RISCV Instruction Set Manual: 
+    Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).
+    Note: XORI rd, rs1, -1 performs a bitwise logical inversion of register rs1 (assembler pseudoinstruction NOT rd, rs).
+    SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
 Current:
-- ~1% error with N=10,000 in <5 seconds
+- <1% error with N=10,000 in <5 seconds
 - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
 - basic overflow error + instruction error (negative shift) handling
 - hash maps for converting opcode, funct3, and ALU_Operation to names

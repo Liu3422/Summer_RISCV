@@ -42,8 +42,8 @@ module ALU(
             OR  : out = rd1 | rd2;
             ADD : out = rd1 + rd2;
             XOR : out = rd1 ^ rd2;
-            SLL : out = rd1 << rd2[4:0];
-            SRL : out = rd1 >> rd2[4:0];
+            SLL : out = rd1 << (rd2[4:0]);
+            SRL : out = rd1 >> (rd2[4:0]);
             SUB : out = rd1 - rd2;
             SRA : out = $signed(rd1) >>> rd2[4:0]; //shift right arithmetic, extends MSB
             SLT : out = ($signed(rd1) < $signed(rd2)) ? 32'b1 : 32'b0; // signed slt

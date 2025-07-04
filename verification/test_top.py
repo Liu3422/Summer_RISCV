@@ -31,6 +31,9 @@ def signed_to_binary(val):
 
 def rshift(val, n): return (val % 0x100000000) >> n #logical right shift
 
+def lshift(val, n): return (val % 0x100000000) << n #logical left shift
+
+
 async def reset_dut(dut):
     print("Resetting DUT \n")
     dut.n_rst.value = 0
@@ -197,34 +200,31 @@ class instruction():
     def model_rd(self, prior): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
         rd1 = prior[1]
-        match op_to_type[self.opcode]:
+        match op_to_type[self.opcode]: #setting rd2 operand
             case "R-Type":
-                field = prior[2]
+                if(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
+                    field = (prior[2]) & 0x1F
+                else:
+                    field = prior[2]
             case "I-Type": 
                 if (Rfunct_to_name[self.funct3][0] == "sltu"):
                     field = (self.imm[0:12]).uint
-                elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ):
-                    field = (self.imm[0:4]).int
+                elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
+                    field = self.imm.int & 0x1F
                 else:
                     field = (self.imm[0:12]).int
         try:
             match Rfunct_to_name[self.funct3][0]:
                 case "add":
-                    if((self.funct7.uint == 32) & (op_to_type[self.opcode] == "R-Type")): return rd1 - field
+                    if((self.funct7.uint == 32) & (op_to_type[self.opcode] == "R-Type")): return rd1 - field #sub
                     else: return rd1 + field 
-                case "sll": return rd1 << field
+                case "sll": return lshift(rd1, field) #rd1 << field 
                 case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
-                case "sltu": 
-                    # match op_to_type[self.opcode]: #ugly fix for unsigned instruction case
-                    #     case "R-Type":
-                    #         field = prior[2]
-                    #     case "I-Type": 
-                    #         field = (self.imm[0:12]).uint
-                    return 1 if (rd1 < field) else 0
+                case "sltu": return 1 if (rd1 < field) else 0
                 case "xor": return rd1 ^ field
                 case "srl": #NOTE: python's >> is arithmetic
-                    if(self.funct7.uint == 32): return rd1 >> (field - 1024) #arithmetic. NOTE: srai's imm field is manually changed here. 
-                    else: return rshift(rd1, field)
+                    if(self.funct7.uint == 32): return rd1 >> (field) #arithmetic
+                    else: return rshift(rd1, field) #logical
                 case "or": return (rd1 | field)
                 case "and": return (rd1 & field)
                 case default: print(f"Model Error")
@@ -249,7 +249,7 @@ class instruction():
             rs1 = unsigned_rs1
             rs2 = unsigned_rs2
             imm = unsigned_imm
-        elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ):
+        elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): #shift instructions
               imm &= 0x1F #only [0:4] bits count towards shift in RV spec
         
         if (op_to_type[self.opcode] == "R-Type"):
@@ -275,7 +275,7 @@ class instruction():
     
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
         dut.instr_cocotb.value = int(self.bin(), 2)
-        # dut.DUT_instr.cocotb.value = int(self.bin(), 2)
+        
 # @cocotb.test()
 #NOTE: This test requires fetch_reg_file/DUT_instr to be commented out, due to race conditions between inserting 
 #the instruction through this testbench and fetching from the instruction. 
@@ -362,8 +362,7 @@ async def R_I_OOP_test(dut):
     cocotb.start_soon(generate_clock(dut))
     await reset_dut(dut) #uncomment if only running this test
     #Testcase
-    # dut.enable.value = int("0", 2)
-    # dut.DUT_instr.enable.value = int("0", 2)
+
     for i in range(10000):
         test = instruction()
         instr_type = random.choice([0,1])  #randomize instruction type
