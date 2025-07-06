@@ -34,7 +34,17 @@ module ALU_control( //strictly combinational?
                     SRL  = 4'b0101,
                     SRA  = 4'b0111,
                     SLT  = 4'b1000,
-                    SLTU = 4'b1001;
+                    SLTU = 4'b1001,
+
+                    // ADDI  = 4'b0010,
+                    // ANDI  = 4'b0000,
+                    // ORI   = 4'b0001,
+                    // XORI  = 4'b0011,
+                    // SLLI  = 4'b1100,
+                    // SRLI  = 4'b1101,
+                    // SRAI  = 4'b1111,
+                    SLTI  = 4'b1100,
+                    SLTIU = 4'b1101;
 
     always_comb begin
         case(ALUOp)
@@ -57,26 +67,15 @@ module ALU_control( //strictly combinational?
         end
         2'b11: begin
             //I-type instructions have instr[30] high sometimes (except SRL and SLL)
-            case(instr)
-            4'b1000: ALU_Operation = ADD;
-            4'b1111: ALU_Operation = AND;
-            4'b1110: ALU_Operation = OR;
-            4'b1100: ALU_Operation = XOR;
-            4'b0001: ALU_Operation = SLL;
-            4'b0101: ALU_Operation = SRL;
-            4'b1101: ALU_Operation = SRA;
-            4'b1010: ALU_Operation = SLT;
-            4'b1011: ALU_Operation = SLTU;
-
-            4'b0000: ALU_Operation = ADD;
-            4'b0111: ALU_Operation = AND;
-            4'b0110: ALU_Operation = OR;
-            4'b0100: ALU_Operation = XOR;
-            // 4'b0001: ALU_Operation = SLL;
-            // 4'b0101: ALU_Operation = SRL;
-            // 4'b0101: ALU_Operation = SRA;
-            4'b0010: ALU_Operation = SLT;
-            4'b0011: ALU_Operation = SLTU;
+            case(instr[2:0])
+            3'b000: ALU_Operation = ADD;
+            3'b111: ALU_Operation = AND;
+            3'b110: ALU_Operation = OR;
+            3'b100: ALU_Operation = XOR;
+            3'b001: ALU_Operation = SLL;
+            3'b101: ALU_Operation = (instr[3] == 1'b1) ? SRA : SRL;
+            3'b010: ALU_Operation = SLTI;
+            3'b011: ALU_Operation = SLTIU;
             default: ALU_Operation = ADD;
             endcase
         end

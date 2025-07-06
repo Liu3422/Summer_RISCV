@@ -29,7 +29,7 @@ def binary_to_signed(val):
 def signed_to_binary(val):
     return val & ((1 << 32) - 1) #2's complement
 
-def rshift(val, n): return (val % 0x100000000) >> n #logical right shift
+def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n
 
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift
 
@@ -86,11 +86,13 @@ ALU_Operation_to_name = {
     int("0000", 2) : "AND",
     int("0001", 2) : "OR",
     int("0011", 2) : "XOR",
-    int("0100", 2) : "SSL",
-    int("0101", 2) : "SLL",
+    int("0100", 2) : "SLL",
+    int("0101", 2) : "SRL",
     int("0111", 2) : "SRA",
     int("1000", 2) : "SLT",
-    int("1001", 2) : "SLTU"
+    int("1001", 2) : "SLTU",
+    int("1100", 2) : "SLTI",
+    int("1101", 2) : "SLTUI"
 }
 
 class dut_fetch():
@@ -159,6 +161,10 @@ class instruction():
             self.imm = Bits(int="0", length=12)
         elif(self.funct3 == Bits(uint="5", length=3)): #valid imm for SRLI, SRAI
             self.imm = Bits(int=(random.choice([0,1024]) + random.choice(range(0, 127))), length=12)
+            if(self.imm.int > 1024):
+                self.funct7 = Bits(uint="32", length=7)
+            else:
+                self.funct7 = Bits(uint="0", length=7)
         return self
     
     def gen_I_instr(self): #generates the I-type instr
@@ -199,7 +205,8 @@ class instruction():
                 
     def model_rd(self, prior): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
-        rd1 = prior[1]
+        rd1 = (prior[1])
+        # print(rd1)
         match op_to_type[self.opcode]: #setting rd2 operand
             case "R-Type":
                 if(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
@@ -209,7 +216,7 @@ class instruction():
             case "I-Type": 
                 if (Rfunct_to_name[self.funct3][0] == "sltu"):
                     field = (self.imm[0:12]).uint
-                elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
+                elif(((Rfunct_to_name[self.funct3][0] == "srl") | (Rfunct_to_name[self.funct3][0] == "sll")) ): # only shift lower 5 bits for srl, sll, srai.
                     field = self.imm.int & 0x1F
                 else:
                     field = (self.imm[0:12]).int
@@ -223,7 +230,7 @@ class instruction():
                 case "sltu": return 1 if (rd1 < field) else 0
                 case "xor": return rd1 ^ field
                 case "srl": #NOTE: python's >> is arithmetic
-                    if(self.funct7.uint == 32): return rd1 >> (field) #arithmetic
+                    if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
                     else: return rshift(rd1, field) #logical
                 case "or": return (rd1 | field)
                 case "and": return (rd1 & field)
@@ -235,8 +242,8 @@ class instruction():
     def monitor(self, DUT, operation): #currently returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         #operation: 
-        # "pre" :won't print imm 
-        # "post" :will print imm
+        # "pre"  : won't print imm 
+        # "post" : will print imm
         rs1 = dut_fetch.reg(DUT, self.rs1)
         rs2 = dut_fetch.reg(DUT, self.rs2)
         unsigned_rs2 = dut_fetch.unsigned_reg(DUT, self.rs2)
@@ -253,22 +260,31 @@ class instruction():
               imm &= 0x1F #only [0:4] bits count towards shift in RV spec
         
         if (op_to_type[self.opcode] == "R-Type"):
+            if(operation == "post"): print("Actual: ", end="")
+            elif(operation == "pre"): print("Pre-instruction: ", end="")
             print(f"rd={rd}, rs1={rs1}, rs2={rs2}")
             return [rd, rs1, rs2]
         elif (op_to_type[self.opcode] == "I-Type"):
-            print(f"rd={rd}, rs1={rs1}", end="")
             if(operation == "post"): #irrelevant prior imm field ignored
-                print(f", imm={imm}")
+                print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}")
                 return [rd, rs1, imm]
-            print()
-            return [rd, rs1]
+            elif(operation == "pre"):
+                print(f"Pre-instruction: rd={rd}, rs1={rs1}")
+                return [rd, rs1]
         
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
         print(f"Expected rd: {expected}")
         if(expected) != (actual[0]):
             print(f"Instruction Failed")
             dut_fetch.control(dut)
-            print()
+            rs1 = dut_fetch.reg(dut, self.rs1)
+            imm = dut_fetch.imm(dut)
+            final = dut_fetch.reg(dut, self.rd)
+            uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
+            uint_imm = dut_fetch.unsigned_imm(dut)
+            uint_final = dut_fetch.unsigned_reg(dut, self.rd)
+            print(f"final={final}, rd1={rs1}, imm={imm}")
+            print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}\n")
         else:
             print(f"Success! \n")
         return
@@ -363,7 +379,7 @@ async def R_I_OOP_test(dut):
     await reset_dut(dut) #uncomment if only running this test
     #Testcase
 
-    for i in range(10000):
+    for i in range(100000):
         test = instruction()
         instr_type = random.choice([0,1])  #randomize instruction type
         if(instr_type == 0):
@@ -375,15 +391,12 @@ async def R_I_OOP_test(dut):
         
         instr.feed(dut)
         
-        print("Pre-instruction: ", end="")
         prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd register values of DUT
 
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
         expected = instr.model_rd(prior) #expected rd value
-        
-        print("Actual: ", end="")
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
         if (expected.bit_length() > 64):

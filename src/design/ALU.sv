@@ -27,7 +27,9 @@
                     SRL  = 4'b0101,
                     SRA  = 4'b0111,
                     SLT  = 4'b1000,
-                    SLTU = 4'b1001;
+                    SLTU = 4'b1001,
+                    SLTI = 4'b1100,
+                    SLTIU = 4'b1101;
 
 module ALU(
     input logic [3:0] ALU_Operation,
@@ -36,6 +38,8 @@ module ALU(
     output logic zero
     );
     assign zero = (out == 0);
+    logic [11:0] imm;
+    assign imm = rd2[11:0];
     always_comb begin
         case (ALU_Operation)
             AND : out = rd1 & rd2;
@@ -45,9 +49,13 @@ module ALU(
             SLL : out = rd1 << (rd2[4:0]);
             SRL : out = rd1 >> (rd2[4:0]);
             SUB : out = rd1 - rd2;
-            SRA : out = $signed(rd1) >>> rd2[4:0]; //shift right arithmetic, extends MSB
+            SRA : out = ($signed(rd1)) >>> rd2[4:0]; //shift right arithmetic, extends MSB
             SLT : out = ($signed(rd1) < $signed(rd2)) ? 32'b1 : 32'b0; // signed slt
             SLTU: out = ($unsigned(rd1) < $unsigned(rd2)) ? 32'b1 : 32'b0; 
+            /* verilator lint_off WIDTHEXPAND */
+            SLTI: out = ($signed(rd1) < $signed(imm)) ? 32'b1 : 32'b0;
+            SLTIU: out = ($unsigned(rd1) < $unsigned(imm)) ? 32'b1 : 32'b0; 
+
             default: out = 0; //undefined region of operation
         endcase    
     end
