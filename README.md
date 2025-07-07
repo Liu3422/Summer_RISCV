@@ -6,7 +6,7 @@ Requirements:
 - Cocotb venv with WSL
 
 Errors:
-- NONE! 
+- NONE!!!
 
     RISCV Instruction Set Manual: 
     Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).

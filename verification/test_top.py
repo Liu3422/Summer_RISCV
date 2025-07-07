@@ -154,9 +154,10 @@ class instruction():
         self = self.gen_random()
         if((Rfunct_to_name[self.funct3][0] != "add") & (Rfunct_to_name[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
             self.funct7 = Bits(uint="0", length=7)
-        if ((Rfunct_to_name[self.funct3][0] != "sll") | (Rfunct_to_name[self.funct3][0] != "srl")): #avoid illegal instruction: negative shift
+        if ((Rfunct_to_name[self.funct3][0] == "sll") | (Rfunct_to_name[self.funct3][0] == "srl")): #avoid illegal instruction: negative shift
             if(dut_fetch.reg(dut, self.rs2) <= 0): 
                 print("Illegal negative shift detected: swapping instruction")
+                self.funct7 = Bits(uint="0", length=7) #ignore sub because error for some reason
                 self.funct3 = Bits(uint=random.choice([0,2,3,4,6,7]), length=3) #switch to everything other than shift 
         self.opcode = Bits(bin="0110011", length=7)
         return self
@@ -168,7 +169,7 @@ class instruction():
         self = self.gen_random()
         self.opcode = Bits(bin="0010011", length=7)
         if(Rfunct_to_name[self.funct3][0] == "sll"): #valid imm for SLLI
-            self.imm = Bits(int="0", length=12)
+            self.imm = Bits(int=random.choice(range(0,31)), length=12)
         elif(Rfunct_to_name[self.funct3][0] == "srl"): #valid imm for SRLI, SRAI
             self.imm = Bits(int=(random.choice([0,1024]) + random.choice(range(0, 127))), length=12)
             if(self.imm.int > 1024):
