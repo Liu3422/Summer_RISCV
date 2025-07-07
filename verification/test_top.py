@@ -12,6 +12,14 @@ from bitstring import Bits, BitArray, pack
 MAX_32B_signed = 2**31 - 1
 MIN_32B_signed = -(2**31)
 
+class node(): #to be used for linked list
+    def __init__(self, key, value, next_node=None):
+        self.key = key
+        self.value = value
+        self.next_node = next_node
+    def set_next(self, next_node):
+        self.next_node = next_node
+
 async def generate_clock(dut):
     """Generate clock pulses."""
 
@@ -29,7 +37,7 @@ def binary_to_signed(val):
 def signed_to_binary(val):
     return val & ((1 << 32) - 1) #2's complement
 
-def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n
+def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
 
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift
 
@@ -70,6 +78,8 @@ op_to_type = {
 }
 
 Rfunct_to_name = { #first entry is funct7=0, second is funct7=0x20
+    #how to change this to something where I don't need to specify [0] normally?
+    #gut reaction: linked list
     Bits(uint="0", length=3) : ["add", "sub"],
     Bits(uint="1", length=3) : ["sll", "" ],
     Bits(uint="2", length=3) : ["slt", "" ],
@@ -142,9 +152,9 @@ class instruction():
     
     def gen_R(self, dut): #generates a random R-type test
         self = self.gen_random()
-        if(self.funct3 != Bits(uint="0", length=3) & self.funct3 != Bits(uint="5", length=3)): #Switches funct7 for invalid instructions
+        if((Rfunct_to_name[self.funct3][0] != "add") & (Rfunct_to_name[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
             self.funct7 = Bits(uint="0", length=7)
-        if ((self.funct3 == Bits(uint="1", length=3)) | (self.funct3 == Bits(uint="5", length=3))): #avoid illegal instruction: negative shift
+        if ((Rfunct_to_name[self.funct3][0] != "sll") | (Rfunct_to_name[self.funct3][0] != "srl")): #avoid illegal instruction: negative shift
             if(dut_fetch.reg(dut, self.rs2) <= 0): 
                 print("Illegal negative shift detected: swapping instruction")
                 self.funct3 = Bits(uint=random.choice([0,2,3,4,6,7]), length=3) #switch to everything other than shift 
@@ -157,9 +167,9 @@ class instruction():
     def gen_I(self): #generates a random I-type test
         self = self.gen_random()
         self.opcode = Bits(bin="0010011", length=7)
-        if(self.funct3 == Bits(uint="1", length=3)): #valid imm for SLLI
+        if(Rfunct_to_name[self.funct3][0] == "sll"): #valid imm for SLLI
             self.imm = Bits(int="0", length=12)
-        elif(self.funct3 == Bits(uint="5", length=3)): #valid imm for SRLI, SRAI
+        elif(Rfunct_to_name[self.funct3][0] == "srl"): #valid imm for SRLI, SRAI
             self.imm = Bits(int=(random.choice([0,1024]) + random.choice(range(0, 127))), length=12)
             if(self.imm.int > 1024):
                 self.funct7 = Bits(uint="32", length=7)
@@ -177,7 +187,7 @@ class instruction():
             case "I-Type":
                 return (self.gen_I_instr()).bin
     
-    def decode(self, index):
+    def decode(self, index): #prints instr-type, name, register nums, imm value, and instruction binary
         #find opcode/instruction type. Only R and I currently
         print(f"Test {index}")
         print(f"Instruction type: {op_to_type[self.opcode]}")
@@ -190,9 +200,9 @@ class instruction():
                         print(f"Name: {Rfunct_to_name[self.funct3][1]}")
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint} rs2={self.rs2.uint}")
             case "I-Type": 
-                if((self.funct3.uint == 5) & (self.imm.int > 1024)): #srai special case
+                if((Rfunct_to_name[self.funct3][0] == "srl") & (self.imm.int > 1024)): #srai special case
                     print(f"Name: srai")
-                elif(self.funct3.uint == 3): #sltiu is unsigned
+                elif(Rfunct_to_name[self.funct3][0] == "sltu"): #sltiu is unsigned
                     print(f"Name: sltiu")
                     print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={(self.imm[0:12]).uint}")
                     return
@@ -239,7 +249,7 @@ class instruction():
             print(f"Error occured on {Rfunct_to_name[self.funct3]}. Probably negative shift error \n {e}")
             return 0
             
-    def monitor(self, DUT, operation): #currently returns 3 arguments read from DUT
+    def monitor(self, DUT, operation): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         #operation: 
         # "pre"  : won't print imm 
@@ -376,10 +386,8 @@ async def adder_randomized_test(dut):
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await reset_dut(dut) #uncomment if only running this test
-    #Testcase
-
-    for i in range(100000):
+    await reset_dut(dut) 
+    for i in range(10000):
         test = instruction()
         instr_type = random.choice([0,1])  #randomize instruction type
         if(instr_type == 0):
@@ -399,8 +407,8 @@ async def R_I_OOP_test(dut):
         expected = instr.model_rd(prior) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
-        if (expected.bit_length() > 64):
-            print(f"Severe overflow detected: {expected.bit_length()} bits")
+        if (expected.bit_length() > 64): #how to make this it's own function while also printing?
+            print(f"Severe overflow detected: {expected.bit_length()} bits") #async def + print is weird
             await reset_dut(dut)
         elif((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
             print(f"Overflow detected: {expected}")
