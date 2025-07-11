@@ -11,6 +11,7 @@ from bitstring import Bits, BitArray, pack
 
 MAX_32B_signed = 2**31 - 1
 MIN_32B_signed = -(2**31)
+SHIFT_MASK = 0x1F
 
 class node(): #to be used for linked list
     def __init__(self, key, value, next_node=None):
@@ -152,9 +153,9 @@ class instruction():
     
     def gen_R(self, dut): #generates a random R-type test
         self = self.gen_random()
-        if((Rfunct3[self.funct3][0] != "add") & (Rfunct3[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
+        if((Rfunct3[self.funct3][0] != "add") and (Rfunct3[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
             self.funct7 = Bits(uint="0", length=7)
-        if ((Rfunct3[self.funct3][0] == "sll") | (Rfunct3[self.funct3][0] == "srl")): #avoid illegal instruction: negative shift
+        if ((Rfunct3[self.funct3][0] == "sll") or (Rfunct3[self.funct3][0] == "srl")): #avoid illegal instruction: negative shift
             if(dut_fetch.reg(dut, self.rs2) <= 0): 
                 print("Illegal negative shift detected: swapping instruction")
                 self.funct7 = Bits(uint="0", length=7) #ignore sub because error for some reason
@@ -201,7 +202,7 @@ class instruction():
                         print(f"Name: {Rfunct3[self.funct3][1]}") #only place that uses self.funct3[1]
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint} rs2={self.rs2.uint}")
             case "I-Type": 
-                if((Rfunct3[self.funct3][0] == "srl") & (self.imm.int > 1024)): #srai special case
+                if((Rfunct3[self.funct3][0] == "srl") and (self.imm.int > 1024)): #srai special case
                     print(f"Name: srai")
                 elif(Rfunct3[self.funct3][0] == "sltu"): #sltiu is unsigned
                     print(f"Name: sltiu")
@@ -217,24 +218,23 @@ class instruction():
     def model_rd(self, prior): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
         rd1 = (prior[1])
-        # print(rd1)
         match op[self.opcode]: #setting rd2 operand
             case "R-Type":
-                if(((Rfunct3[self.funct3][0] == "srl") | (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
-                    field = (prior[2]) & 0x1F
+                if(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
+                    field = (prior[2]) & SHIFT_MASK
                 else:
                     field = prior[2]
             case "I-Type": 
                 if (Rfunct3[self.funct3][0] == "sltu"):
                     field = (self.imm[0:12]).uint
-                elif(((Rfunct3[self.funct3][0] == "srl") | (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits for srl, sll, srai.
-                    field = self.imm.int & 0x1F
+                elif(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits for srl, sll, srai.
+                    field = self.imm.int & SHIFT_MASK
                 else:
                     field = (self.imm[0:12]).int
         try:
-            match Rfunct3[self.funct3][0]:
+            match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
                 case "add":
-                    if((self.funct7.uint == 32) & (op[self.opcode] == "R-Type")): return rd1 - field #sub
+                    if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
                     else: return rd1 + field 
                 case "sll": return lshift(rd1, field) #rd1 << field 
                 case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
@@ -262,26 +262,26 @@ class instruction():
         rd = dut_fetch.reg(DUT, self.rd)
         imm = dut_fetch.imm(DUT)
         unsigned_imm = dut_fetch.unsigned_imm(DUT) & 0xFFF
-        
-        if(Rfunct3[self.funct3][0] == "sltu" ): #unsigned conversion case
-            rs1 = unsigned_rs1
-            rs2 = unsigned_rs2
-            imm = unsigned_imm
-        elif(((Rfunct3[self.funct3][0] == "srl") | (Rfunct3[self.funct3][0] == "sll")) ): #shift instructions
-              imm &= 0x1F #only [0:4] bits count towards shift in RV spec
-        
-        if (op[self.opcode] == "R-Type"):
-            if(operation == "post"): print("Actual: ", end="")
-            elif(operation == "pre"): print("Pre-instruction: ", end="")
-            print(f"rd={rd}, rs1={rs1}, rs2={rs2}")
-            return [rd, rs1, rs2]
-        elif (op[self.opcode] == "I-Type"):
-            if(operation == "post"): #irrelevant prior imm field ignored
-                print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}")
-                return [rd, rs1, imm]
-            elif(operation == "pre"):
-                print(f"Pre-instruction: rd={rd}, rs1={rs1}")
-                return [rd, rs1]
+        match Rfunct3[self.funct3][0]:
+            case "sltu":
+                rs1 = unsigned_rs1
+                rs2 = unsigned_rs2
+                imm = unsigned_imm
+            case "srl": imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
+            case "sll": imm &= SHIFT_MASK 
+        match op[self.opcode]:
+            case "R-Type":
+                if(operation == "post"): print("Actual: ", end="")
+                elif(operation == "pre"): print("Pre-instruction: ", end="")
+                print(f"rd={rd}, rs1={rs1}, rs2={rs2}")
+                return [rd, rs1, rs2]
+            case "I-Type":
+                if(operation == "post"): #irrelevant prior imm field ignored
+                    print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}")
+                    return [rd, rs1, imm]
+                elif(operation == "pre"):
+                    print(f"Pre-instruction: rd={rd}, rs1={rs1}")
+                    return [rd, rs1]
         
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
         print(f"Expected rd: {expected}")
@@ -331,7 +331,7 @@ async def R_I_OOP_test(dut):
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
             print(f"Severe overflow detected: {expected.bit_length()} bits") #async def + print is weird
             await reset_dut(dut)
-        elif((expected >= MAX_32B_signed) | (expected <= MIN_32B_signed)): #Overflow check
+        elif((expected >= MAX_32B_signed) or (expected <= MIN_32B_signed)): #Overflow check
             print(f"Overflow detected: {expected}")
             await reset_dut(dut)
         else:
