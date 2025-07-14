@@ -5,7 +5,8 @@ Requirements:
 - Vivado
 - Cocotb venv with WSL
 
-**Cocotb**:
+**Cocotb**
+
     Errors:
     - NONE!!!
 
@@ -44,6 +45,7 @@ Requirements:
     - What exactly makes something OOP? 
 
 **Nexys A7 100T**
+
     Goal: output writeback (RV32I_core output) to the seven-segment displays for a customizable time. 
 
     Current:
@@ -53,6 +55,6 @@ Requirements:
         - at normal clk, RV32I_core at 1/9 clk speed
         - consists only of display controller currently
     - sv2v used to convert top.sv of RV32I_core and implement. RV32I_core packaged as custom IP. 
-        - Do I need to copy RV32I_core into design if I plan on importing it as custom IP?
+        - Do I need to copy RV32I_core into design if I plan on importing it as custom IP? I don't think there are difference anyway
     - wavedroms:
         - display_controller

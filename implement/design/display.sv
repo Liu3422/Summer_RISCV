@@ -7,7 +7,8 @@ module display (
     output logic [3:0] display_char,
     output logic [7:0] ssd_en
 );
-typedef enum logic [4:0] {INIT, FIRST, SECOND, THIRD, FOURTH, FIFTH, SIXTH, SEVENTH, EIGTH} state_t;
+// Displays MSB first and continuously cycles until rollover_flag from display_count. 
+typedef enum logic [4:0] {INIT, FIRST, SECOND, THIRD, FOURTH, FIFTH, SIXTH, SEVENTH, EIGHTH} state_t;
 state_t state, next;
 
     always_ff @(posedge clk, negedge n_rst) begin
@@ -82,9 +83,9 @@ state_t state, next;
         SEVENTH: begin
             n_ssd_en = 8'b1 << 1;
             n_display_char = writeback[7:4];
-            next = EIGTH;
+            next = EIGHTH;
         end
-        EIGTH: begin
+        EIGHTH: begin
             n_ssd_en = 8'b1;
             n_display_char = writeback[3:0];
             n_shift_strobe = 1'b1;
