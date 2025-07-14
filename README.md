@@ -5,40 +5,54 @@ Requirements:
 - Vivado
 - Cocotb venv with WSL
 
-Errors:
-- NONE!!!
+**Cocotb**:
+    Errors:
+    - NONE!!!
 
-    RISCV Instruction Set Manual: 
-    Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).
-    Note: XORI rd, rs1, -1 performs a bitwise logical inversion of register rs1 (assembler pseudoinstruction NOT rd, rs).
-    SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
+        RISCV Instruction Set Manual: 
+        Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).
+        Note: XORI rd, rs1, -1 performs a bitwise logical inversion of register rs1 (assembler pseudoinstruction NOT rd, rs).
+        SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
-Current:
-- 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
-- 1% overflow rate, 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
-- directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
-- basic overflow error + instruction error (negative shift) handling
-- hash maps for converting opcode, funct3, and ALU_Operation to names
-- every testbench component (except scoreboard) featured in the instruction() class
-- attempting fibonacci test on SV testbench
+    Current:
+    - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
+    - 1% overflow rate, 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
+    - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
+    - basic overflow error + instruction error (negative shift) handling
+    - hash maps for converting opcode, funct3, and ALU_Operation to names
+    - every testbench component (except scoreboard) featured in the instruction() class
+    - attempting fibonacci test on SV testbench
 
-Future:
-- Scoreboard/log parsing
-- "Fail-mode" with truly random/incorrect instructions
-- Randomize state of DUT: random RF?
-- Create more classes: Testcase, (idk yet) 
-- Store instructions into memory for DUT to fetch.
-    - Idea: store batches (say 1000), execute them all, flush, repeat.
-- S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
-- Constrained random coverage with branch instructions?
-    - Extremely unpredictable behavior prone to looping.
-    - What exactly would this prove verification-wise?
+    Future:
+    - Scoreboard/log parsing
+    - "Fail-mode" with truly random/incorrect instructions
+    - Randomize state of DUT: random RF?
+    - Create more classes: Testcase, (idk yet) 
+    - Store instructions into memory for DUT to fetch.
+        - Idea: store batches (say 1000), execute them all, flush, repeat.
+    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
+    - Constrained random coverage with branch instructions?
+        - Extremely unpredictable behavior prone to looping.
+        
+        - What exactly would this prove verification-wise?
 
-Code Quality (in progress):
-- Rfunct3: change to linked list so you don't have to specify [0] normally
-- Decrease length of hash names (they all output strings/names)
-- more match/case statements where necessary
-- dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
+    Code Quality (in progress):
+    - Rfunct3: change to linked list so you don't have to specify [0] normally
+    - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
-Concerns:
-- What exactly makes something OOP? 
+    Concerns:
+    - What exactly makes something OOP? 
+
+**Nexys A7 100T**
+    Goal: output writeback (RV32I_core output) to the seven-segment displays for a customizable time. 
+
+    Current:
+    - No code violations with Verilator nor Vivado (xsim)
+    - Skeleton code for Data Buffer
+    - ***GPIO***: 
+        - at normal clk, RV32I_core at 1/9 clk speed
+        - consists only of display controller currently
+    - sv2v used to convert top.sv of RV32I_core and implement. RV32I_core packaged as custom IP. 
+        - Do I need to copy RV32I_core into design if I plan on importing it as custom IP?
+    - wavedroms:
+        - display_controller

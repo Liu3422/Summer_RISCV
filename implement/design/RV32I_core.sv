@@ -22,14 +22,14 @@
 
 module RV32I_core(
     input logic clk, n_rst,
-    input logic [31:0] instr,
-    output logic [31:0] PC_Next, 
-    writeback //output from execute/writeback reg file
+    // input logic [31:0] instr,
+    output logic [31:0]  writeback //output from execute/writeback reg file
+    //PC_Next, 
 );
 
 logic [31:0] PC; 
-// logic [31:0] PC_Next;
-// logic [31:0] instr; 
+logic [31:0] PC_Next;
+logic [31:0] instr; 
 
 always_ff @(posedge clk, negedge n_rst) begin
     if(!n_rst) 
@@ -38,6 +38,10 @@ always_ff @(posedge clk, negedge n_rst) begin
         PC <= PC_Next; 
 end
 
+fetch_instr #(.NUM_INSTR(1024)) DUT_instr (.clk(clk), .n_rst(n_rst),
+    .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
+    .instr(instr)
+); 
 
 logic beq_cond, bne_cond, PCSrc, zero;
 logic [2:0] funct3;

@@ -21,7 +21,8 @@
 
 
 module top(
-    input logic clk, n_rst
+    input logic clk, n_rst,
+    output logic [31:0] write_data
     ); 
 
 logic [31:0] PC;
@@ -48,7 +49,7 @@ assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when al
 
 always_comb begin
     if(beq_cond | bne_cond) 
-        PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out. 
+        PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out. Currently only supports B-type and I type jalr
     else
         PC_Next = PC + 4;
 end
@@ -58,10 +59,9 @@ end
     logic [31:0] instr_cocotb;
     assign instr = instr_cocotb;
 `else
-    fetch_reg_file #(.NUM_INSTR(1024)) DUT_instr (.clk(clk), .n_rst(n_rst),
+    fetch_instr #(.NUM_INSTR(1024)) DUT_instr (.clk(clk), .n_rst(n_rst),
         .PC(PC), //watch for potential timing hazards (PC vs PC_Next)
         .instr(instr)
-        // ,.enable(enable)
     ); 
 `endif 
 
@@ -121,6 +121,7 @@ memory_reg_file #(.NUM_WORDS(32)) DUT_Data(.clk(clk), .n_rst(n_rst),
     .execute_data(execute_data)
 );
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
+assign write_data = writeback; //output of the RV32I_core
 // assign upper_imm = imm_out[31:12]; //getting rid of warning
 // logic [11:0] imm_out;
 imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */

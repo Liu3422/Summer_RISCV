@@ -68,8 +68,8 @@ async def reset_dut(dut):
 op = {
     Bits(bin="0110011", length=7) : "R-Type",
     Bits(bin="0010011", length=7) : "I-Type",
-    Bits(bin="0000011", length=7) : "I-Type",
-    Bits(bin="0100011", length=7) : "S-Type",
+    Bits(bin="0000011", length=7) : "I-Type", #load, change name?
+    Bits(bin="0100011", length=7) : "S-Type", 
     Bits(bin="1100011", length=7) : "B-Type",
     Bits(bin="1101111", length=7) : "J-Type",
     Bits(bin="1100111", length=7) : "I-Type",
