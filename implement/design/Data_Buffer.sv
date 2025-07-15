@@ -7,5 +7,5 @@ module Data_Buffer #(
     output logic [31:0] data_out,
     output logic [4:0] buffer_occ
 );
-
+    assign data_out = data_in; //temp code 
 endmodule

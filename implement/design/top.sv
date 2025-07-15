@@ -26,7 +26,7 @@ RV32I_core DUT_core (.clk(core_clk), .n_rst(n_rst),
     .writeback(core_out) //data written to memory or ALU outputs.
 );
 
-logic [5:0] buffer_occ;
+logic [4:0] buffer_occ;
 Data_Buffer DUT_Buffer ( .clk(clk), .n_rst(n_rst),
     .data_in(core_out),
     .data_out(writeback),

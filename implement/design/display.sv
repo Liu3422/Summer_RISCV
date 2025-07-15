@@ -11,6 +11,10 @@ module display (
 typedef enum logic [4:0] {INIT, FIRST, SECOND, THIRD, FOURTH, FIFTH, SIXTH, SEVENTH, EIGHTH} state_t;
 state_t state, next;
 
+logic n_shift_strobe;
+logic [3:0] n_display_char;
+logic [7:0] n_ssd_en;
+
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
             state <= INIT;
@@ -25,10 +29,6 @@ state_t state, next;
             ssd_en <= n_ssd_en;
         end
     end
-
-    logic n_shift_strobe;
-    logic [3:0] n_display_char;
-    logic [7:0] n_ssd_en;
 
     always_comb begin   
         //common state

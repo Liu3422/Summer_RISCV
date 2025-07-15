@@ -36,7 +36,9 @@ module control(
               RTYPE = 7'b0110011,
               STORE = 7'b0100011,
               LOAD  = 7'b0000011,
-              ITYPE = 7'b0010011;
+              ITYPE = 7'b0010011,
+              JAL   = 7'b1101111, //work in progress
+              JALR  = 7'b1100111; //work in progress
     always_comb begin //note: MemRead is not implemented yet.
         {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead} = 8'b01000010; //default/common case
         case(instr)

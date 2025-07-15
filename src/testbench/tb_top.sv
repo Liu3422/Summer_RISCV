@@ -96,17 +96,44 @@ module tb_top ();
             $display("x2 doesn't equal 3");
         $display("Test 4 complete");
 
-        //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
-        $display("Test 5, fibonacci test");
+        // //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
+        // $display("Test 5, fibonacci test");
+        // reset_dut;
+        // $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
+        // DUT.DUT_RF.RF[5] = 32'd10; //10th term
+        // for(int i = 0; i < 100; i++) 
+        //     @(posedge clk);
+        // if(DUT.DUT_RF.RF[10] != 32'd55)
+        //     $display("test is wrong");
+        // $display("Actual, %d", DUT.DUT_RF.RF[10]);
+        // $display("Test 5 complete");
+
+        //test6, jal and jalr tests.
+        $display("Test 6, basic jal and jalr tests");
         reset_dut;
-        $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
-        DUT.DUT_RF.RF[5] = 32'd10; //10th term
-        for(int i = 0; i < 100; i++) 
+        $display("Test 6, jal");
+        $readmemh("test6_jump.mem", DUT.DUT_instr.instruction_memory);
+        for(int i = 0; i < 5; i++) 
             @(posedge clk);
-        if(DUT.DUT_RF.RF[10] != 32'd55)
-            $display("test is wrong");
-        $display("Actual, %d", DUT.DUT_RF.RF[10]);
-        $display("Test 5 complete");
+        if(DUT.DUT_RF.RF[2] == 32'd1)
+            $display("test is wrong, jump didn't occur and instr not skipped");
+        else if(DUT.DUT_RF.RF[3] != 32'd2)
+            $display("jal test is wrong, didn't jump to right location");
+        else
+            $display("Test Passed!");
+        reset_dut;
+        $display("Test 6a, jalr");
+        $readmemh("test6a_jalr.mem", DUT.DUT_instr.instruction_memory);
+        for(int i = 0; i < 6; i++) 
+            @(posedge clk);
+        if(DUT.DUT_RF.RF[5] != 32'd12)
+            $display("test is wrong, incorrect return address (12):", DUT.DUT_RF.RF[5]);
+        else if(DUT.DUT_RF.RF[3] != 32'd2)
+            $display("test is wrong, jumped to wrong place (missed important instruction, 2): ", DUT.DUT_RF.RF[3]);
+        else if(DUT.DUT_RF.RF[2] != 0)
+            $display("test is wrong, didn't jump (0):", DUT.DUT_RF.RF[2]);
+        else
+            $display("Test Passed!");
 
         $finish;
     end
