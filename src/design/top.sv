@@ -44,25 +44,48 @@ always_ff @(posedge clk, negedge n_rst) begin
 
 end
 
-logic beq_cond, bne_cond, zero, UncondJump, jal_cond, jalr_cond, blt_cond, bge_cond, bltu_cond, bgeu_cond, branch_cond;
+logic zero, UncondJump, jal_cond, jalr_cond, branch_cond, branch_unsigned;
 logic [1:0] PCSrc;
 logic [2:0] funct3;
 /* synthesis keep */ logic [31:0] imm_out, rd1, beq_value; //synthesis directive
 assign funct3 = instr[14:12];
-assign beq_cond = (PCSrc == 2'b1 & zero) & (funct3 == 3'b000); 
-assign bne_cond = (PCSrc == 2'b1 & !zero) & (funct3 == 3'b001);
-assign blt_cond = 
-assign bge_cond = 
-assign bltu_cond = 
-assign bgeu_cond = 
+// assign beq_cond = (PCSrc == 2'b1 & zero) & (funct3 == 3'b000); 
+// assign bne_cond = (PCSrc == 2'b1 & !zero) & (funct3 == 3'b001);
+// assign blt_cond = 
+// assign bge_cond = 
+// assign bltu_cond = 
+// assign bgeu_cond = 
+// assign branch_cond = beq_cond | bne_cond | blt_cond | bge_cond | bltu_cond | bgeu_cond;
+
+always_comb begin
+    branch_unsigned = 0;
+    branch_cond = 0;
+    if(PCSrc == 2'b1) begin
+        case(funct3)
+        3'd0: branch_cond = zero; //beq
+        3'd1: branch_cond = !zero; //bne
+        3'd4: branch_cond = ($signed(ALU_Out) < 0); //blt
+        3'd5: branch_cond = ($signed(ALU_Out) >= 0); //bge
+        3'd6: begin //bltu
+            branch_cond = (ALU_Out >= 0);
+            branch_unsigned = 1'b1;
+        end
+        3'd7: begin //bgeu
+            branch_cond = (ALU_Out < 0);
+            branch_unsigned = 1'b1;
+        end
+        default: branch_cond = 0; //undefined region of operation, no branch.
+        endcase
+    end
+end
 assign jal_cond = (UncondJump & PCSrc == 2'b01);
 assign jalr_cond = (UncondJump & PCSrc == 2'b10);
-assign beq_value = {{20{imm_out[11]}}, imm_out[11:0]}; // << 1; //debug purposes
-assign branch_cond = beq_cond | bne_cond | blt_cond | bge_cond | bltu_cond | bgeu_cond;
+
+assign beq_value = branch_unsigned ? {20'b0, imm_out[11:0]}: {{20{imm_out[11]}}, imm_out[11:0]}; // << 1; //debug purposes
 always_comb begin
     if (jal_cond) 
         PC_Next = PC + imm_out;
-    else if(beq_cond | bne_cond) 
+    else if(branch_cond) 
         PC_Next = PC + beq_value; //sign extension for signed imm_out
     else if (jalr_cond) 
         PC_Next = rd1 + imm_out; 

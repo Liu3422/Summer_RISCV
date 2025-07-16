@@ -7,6 +7,7 @@
 #      * back to the array `arr` at corresponding indices.
 #      **/
 
+#     /* Enter your code after this comment */
 #     //*arr at x10, length at x11
     beq x10, x0, RETURN 
     beq x11, x0, RETURN
@@ -14,14 +15,13 @@
         li t0, 0 #t0 = prev = 0
         li t1, 1 #t1 = curr = 1
         li t2, 0 #t2 = i = 0
-        jal x0, FOR #go to for loop
-
+#         jal x0, FOR #go to for loop
     FOR: 
         bge t2, x11, RETURN #return if i >= length. Forgot how to get to return addr from here.
 
-        li t3, 4
-        slli t4, t2, 2 #i(byte offset) = i * 4 (to iterate) 
-        add t5, x10, t4 #index offset + *arr = i -> arr[i]
+#         li t3, 4
+#         slli t4, t2, 2 #i(byte offset) = i * 4 (to iterate) 
+        add t5, x10, t2 #index offset + *arr = i -> arr[i]
 
         beq t2, x0, IF #if i == 0
         li t6, 1
@@ -34,17 +34,14 @@
 
         addi t2, t2, 1 #i++
         jal x0, FOR
-
     IF:
         sw t0, 0(t5) #arr[i] = prev
         addi t2, t2, 1 #i++
         jal x0, FOR #return to loop
-
     ELSE1:
         sw t1, 0(t5) #arr[i] = curr
         addi t2, t2, 1 #i++
         jal x0, FOR
-
     RETURN: 
         ret
     ret
