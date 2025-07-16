@@ -20,8 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module imm_gen( //without swizzle. INCOMPLETE!!!
-    // input logic clk, n_rst,
+module imm_gen(
     input logic [31:0] instr,
     output logic [31:0] imm_out
     );
@@ -31,14 +30,14 @@ module imm_gen( //without swizzle. INCOMPLETE!!!
               UJ = 7'b1101111,
               JALR = 7'b1100111,
               U  = 7'b0110111; //no auipc
-    // logic sign_ext;
-    // assign sign_ext = instr[31];
+    logic [6:0] opcode;
+    assign opcode = instr[6:0];
     always_comb begin
-        case(instr[6:0]) //opcode
+        case(opcode) //opcode
             I: imm_out    = {{20{instr[31]}}, instr[31:20]}; //sign extension
             S: imm_out    = {{20{instr[31]}}, instr[31:25], instr[11:7]};
             SB: imm_out   = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
-            UJ: imm_out   = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:25], instr[11:8], 1'b0};
+            UJ: imm_out   = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:25], instr[24:21], 1'b0};
             JALR: imm_out = {{20{instr[31]}}, instr[20], instr[30:25], instr[11:8], 1'b0}; //Unconditional Jump
             U: imm_out    = {instr[31:12], 12'b0};
             default: imm_out = 32'b0; //edge case?

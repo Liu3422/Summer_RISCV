@@ -33,28 +33,28 @@
 
 module ALU(
     input logic [3:0] ALU_Operation,
-    input logic [31:0] rd1, rd2,
+    input logic [31:0] in1, in2,
     output logic [31:0] out,
     output logic zero
     );
     assign zero = (out == 0);
     logic [11:0] imm;
-    assign imm = rd2[11:0];
+    assign imm = in2[11:0];
     always_comb begin
         case (ALU_Operation)
-            AND : out = rd1 & rd2;
-            OR  : out = rd1 | rd2;
-            ADD : out = rd1 + rd2;
-            XOR : out = rd1 ^ rd2;
-            SLL : out = rd1 << (rd2[4:0]);
-            SRL : out = rd1 >> (rd2[4:0]);
-            SUB : out = rd1 - rd2;
-            SRA : out = ($signed(rd1)) >>> rd2[4:0]; //shift right arithmetic, extends MSB
-            SLT : out = ($signed(rd1) < $signed(rd2)) ? 32'b1 : 32'b0; // signed slt
-            SLTU: out = ($unsigned(rd1) < $unsigned(rd2)) ? 32'b1 : 32'b0; 
+            AND : out = in1 & in2;
+            OR  : out = in1 | in2;
+            ADD : out = in1 + in2;
+            XOR : out = in1 ^ in2;
+            SLL : out = in1 << (in2[4:0]);
+            SRL : out = in1 >> (in2[4:0]);
+            SUB : out = in1 - in2;
+            SRA : out = ($signed(in1)) >>> in2[4:0]; //shift right arithmetic, extends MSB
+            SLT : out = ($signed(in1) < $signed(in2)) ? 32'b1 : 32'b0; // signed slt
+            SLTU: out = ($unsigned(in1) < $unsigned(in2)) ? 32'b1 : 32'b0; 
             /* verilator lint_off WIDTHEXPAND */
-            SLTI: out = ($signed(rd1) < $signed(imm)) ? 32'b1 : 32'b0;
-            SLTIU: out = ($unsigned(rd1) < $unsigned(imm)) ? 32'b1 : 32'b0; 
+            SLTI: out = ($signed(in1) < $signed(imm)) ? 32'b1 : 32'b0;
+            SLTIU: out = ($unsigned(in1) < $unsigned(imm)) ? 32'b1 : 32'b0; 
 
             default: out = 0; //undefined region of operation
         endcase    

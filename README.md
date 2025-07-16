@@ -58,3 +58,19 @@ Requirements:
         - Do I need to copy RV32I_core into design if I plan on importing it as custom IP? I don't think there are difference anyway
     - wavedroms:
         - display_controller
+**RV32I_core**
+    Mostly done, a couple more instructions to go. 
+
+    In progress: 
+    - TDD for jump instructions (jal, jalr, etc).
+        - Imm field for jal is 0
+    - More complex SV testcases, like fibonacci 
+    - Test 6 cases aren't printing the PC + instr for each clk, only the last instr for some reason. 
+        -Attempted fixes: changing order of $display before/after running instructions, $display before clk, 
+
+    Concerns:
+    - When processing a jump/branch instruction, the PC still increments and the subsequent instruction is fed into the DUT. Would this be a problem?
+    - PC increments before the testbench "officially" runs the instructions.
+    - PC increments when fetching the first instruction (during PC = 0), leading to the second instruction being fetched no matter what.
+        - It goes PC = 0 instr = 0 *CLK* PC=4, instr=(1st instr) *CLK* PC=X, instr(2nd instr)
+        - Thus, PC=4 (2nd instr) is always going to be hit, which would lead to the instruction there always being hit. 

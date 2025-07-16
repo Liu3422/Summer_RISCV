@@ -20,60 +20,83 @@ module tb_top ();
         @(negedge clk);
         n_rst = 1;
         // @(negedge clk);
-        // @(negedge clk);
-
         // @(posedge clk); //start testing again. Put/command occurs at posedge clk.
     end
     endtask
-
+integer failed_tests;
     initial begin
         n_rst = 1;
-
         //test 1, featuring addi, add, sub
         $display("Test 1, Arith");
         reset_dut;
         $readmemh("test1_arith.mem", DUT.DUT_instr.instruction_memory);
-
-        for(int i = 0; i < 7; i++) begin
+        failed_tests = 0;
+        for(int i = 0; i < 6; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
         end //NOTE: if you adjust the same register and check for the first change AFTER you run the full program, it would (incorrectly) print an error.
-        if(DUT.DUT_RF.RF[1][31:0] != 32'd10)
+        if(DUT.DUT_RF.RF[1][31:0] != 32'd10) begin
             $display("addi x1, x0, 10 incorrect");
-        if(DUT.DUT_RF.RF[2][31:0] != 32'd5)
+            failed_tests++;
+        end
+        if(DUT.DUT_RF.RF[2][31:0] != 32'd5) begin
             $display("addi x2, x0, 5 incorrect");
-        if(DUT.DUT_RF.RF[3][31:0] != 32'd15)
+            failed_tests++;
+        end
+        if(DUT.DUT_RF.RF[3][31:0] != 32'd15) begin
             $display("add x2, x1, x2 incorrect");
-        if(DUT.DUT_RF.RF[4][31:0] != 32'd5)
+            failed_tests++;
+        end
+        if(DUT.DUT_RF.RF[4][31:0] != 32'd5) begin
             $display("sub x4, x1, x2 incorrect");            
-        $display("Test 1 complete");
+            failed_tests++;
+        end
+        if(!failed_tests)
+            $display("Test 1 passed!\n");
+        else
+            $display("Test 1 failed: %d failed tests\n", failed_tests);
         
         //test 2, featuring addi, sw, lw
         $display("Test 2, Memory");
         reset_dut;
         $readmemh("test2_memory.mem", DUT.DUT_instr.instruction_memory);
-        for(int i = 0; i < 7; i++) begin
+        failed_tests = 0;
+        for(int i = 0; i < 6; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
         end
-        if(DUT.DUT_RF.RF[1][31:0] != 32'd100)
+        if(DUT.DUT_RF.RF[1][31:0] != 32'd100) begin
+            failed_tests++;
             $display("addi x1, x0, 100 incorrect");
-        if(DUT.DUT_Data.data_memory[0] != 32'd100)
+        end
+        if(DUT.DUT_Data.data_memory[0] != 32'd100) begin
+            failed_tests++;
             $display("sw x1, 0(x0) incorrect");
-        if(DUT.DUT_RF.RF[2] != 32'd100)
+        end
+        if(DUT.DUT_RF.RF[2] != 32'd100) begin
+            failed_tests++;
             $display("lw x2, 0(x0) incorrect");
-        if(DUT.DUT_RF.RF[3] != 32'd101)
+        end
+        if(DUT.DUT_RF.RF[3] != 32'd101) begin
+            failed_tests++;
             $display("addi x3, x2, 1 incorrect");
-        $display("Test 2 complete");
+        end
+        if(!failed_tests)
+            $display("Test 2 passed!\n");
+        else
+            $display("Test 2 failed: %d failed tests\n", failed_tests);
         
         // //test 3, featuring addi, bne
         $display("Test 3, Branch");
         reset_dut;
         $readmemh("test3_branch.mem", DUT.DUT_instr.instruction_memory);
-        for(int i = 0; i < 20; i++) begin
+        for(int i = 0; i < 19; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
         end
         if(DUT.DUT_RF.RF[1] != 32'd5) //FOR WHATEVER REASON, ALU OUTPUTS 1 + 1 = 1 (RD1 = 1, RD2 = 2, ALU_OPERATION = ADD (2))
             $display("counter doesn't equal 5");
-        $display("Test 3 complete");
+        $display("Test 3 complete\n");
         /*The Code in question:
         addi x1, x0, 0       # counter = 0
         addi x2, x0, 5       # limit = 5
@@ -87,14 +110,15 @@ module tb_top ();
         $display("Test 4, Add to same register");
         reset_dut;
         $readmemh("test4_add_same_reg.mem", DUT.DUT_instr.instruction_memory);
-        for(int i = 0; i < 6; i++) begin
+        for(int i = 0; i < 7; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
         end
         if(DUT.DUT_RF.RF[1] != 32'd5)
             $display("x1 doesn't equal 5");        
         if(DUT.DUT_RF.RF[2] != 32'd3)
             $display("x2 doesn't equal 3");
-        $display("Test 4 complete");
+        $display("Test 4 complete\n");
 
         // //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
         // $display("Test 5, fibonacci test");
@@ -111,21 +135,28 @@ module tb_top ();
         //test6, jal and jalr tests.
         $display("Test 6, basic jal and jalr tests");
         reset_dut;
-        $display("Test 6, jal");
         $readmemh("test6_jump.mem", DUT.DUT_instr.instruction_memory);
-        for(int i = 0; i < 5; i++) 
+        
+        $display("Test 6, jal");
+        for(int i = 0; i < 5; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
+        end
         if(DUT.DUT_RF.RF[2] == 32'd1)
             $display("test is wrong, jump didn't occur and instr not skipped");
         else if(DUT.DUT_RF.RF[3] != 32'd2)
             $display("jal test is wrong, didn't jump to right location");
         else
             $display("Test Passed!");
+        
         reset_dut;
-        $display("Test 6a, jalr");
         $readmemh("test6a_jalr.mem", DUT.DUT_instr.instruction_memory);
-        for(int i = 0; i < 6; i++) 
+
+        $display("Test 6a, jalr");
+        for(int i = 0; i < 6; i++) begin
             @(posedge clk);
+            $display("PC Next: %08h, instr: %08h", DUT.PC, DUT.instr);
+        end
         if(DUT.DUT_RF.RF[5] != 32'd12)
             $display("test is wrong, incorrect return address (12):", DUT.DUT_RF.RF[5]);
         else if(DUT.DUT_RF.RF[3] != 32'd2)
@@ -134,7 +165,7 @@ module tb_top ();
             $display("test is wrong, didn't jump (0):", DUT.DUT_RF.RF[2]);
         else
             $display("Test Passed!");
-
+        $display("Test 6 complete\n");
         $finish;
     end
 endmodule

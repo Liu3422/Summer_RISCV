@@ -31,29 +31,33 @@ logic [31:0] instr;
 // logic n_rst;
 // assign n_rst = n_rst1 | CPU_RESET; //trying C12 button on Nexys A7
 
-always_ff @(posedge clk, negedge n_rst) begin //updates on negative edge of clk, specifically after the instruction is fetch-decode-executed.
-//update: negedge would fix the branching issue (branches to PC that's one step ahead, thus incorrect instruction), but breaks the general case.
+always_ff @(posedge clk, negedge n_rst) begin 
     if(!n_rst) 
         PC <= 0;
     else
         PC <= PC_Next; 
 end
 
-logic beq_cond, bne_cond, PCSrc, zero;
+logic beq_cond, bne_cond, zero, UncondJump, jal_cond, jalr_cond;
+logic [1:0] PCSrc;
 logic [2:0] funct3;
-/* synthesis keep */ logic [31:0] imm_out; //synthesis directive
+/* synthesis keep */ logic [31:0] imm_out, rd1; //synthesis directive
 assign funct3 = instr[14:12];
-assign beq_cond = (PCSrc & zero) & (funct3 == 3'b000); //zero is raised when alu_out == 0
-assign bne_cond = (PCSrc & !zero) & (funct3 == 3'b001); //zero is raised when alu_out != 0, for bne instr
-// assign zero = (ALU_Out == 32'b0); // zero is raised
+assign beq_cond = (PCSrc == 2'b1 & zero) & (funct3 == 3'b000); 
+assign bne_cond = (PCSrc == 2'b1 & !zero) & (funct3 == 3'b001);
+assign jal_cond = (UncondJump & PCSrc == 2'b01);
+assign jalr_cond = (UncondJump & PCSrc == 2'b10);
 
 always_comb begin
-    if(beq_cond | bne_cond) 
+    if (jal_cond) //jal
+        PC_Next = PC + imm_out;
+    else if(beq_cond | bne_cond) 
         PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out. Currently only supports B-type and I type jalr
+    else if (jalr_cond) //jalr
+        PC_Next = ALU_Out; //jalr
     else
         PC_Next = PC + 4;
 end
-
 // logic enable;
 `ifdef COCOTB_SIM
     logic [31:0] instr_cocotb;
@@ -78,13 +82,14 @@ control DUT2 (
     .MemWr(MemWr),
     .MemRead(MemRead),
     .MemtoReg(MemtoReg),
-    .ALUOp(ALUOp)
+    .ALUOp(ALUOp),
+    .UncondJump(UncondJump)
 );
-logic [7:0] debug_control;
-assign debug_control = {PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg, ALUOp};
+logic [9:0] debug_control;
+assign debug_control = {PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg, ALUOp, UncondJump};
 
 logic [31:0] writeback; //output from execute/writeback reg file
-logic [31:0] rd1, rd2;
+logic [31:0] rd2;
 decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
     .RegWr(RegWr),
     .read_reg1(instr[19:15]),
@@ -96,15 +101,18 @@ decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
 );
 
 logic [3:0] ALU_Operation; //output from ALU_control
-logic [31:0] ALU_Out, ALU_in2; //ALU_in2 is from mux of rd2 or imm_gen
+logic [31:0] ALU_Out, ALU_in1, ALU_in2; //ALU_in1: rd1 or PC. ALU_in2: rd2 or imm_gen
+
+assign ALU_in2 = (ALUSrc) ? {{20{imm_out[11]}}, imm_out[11:0]} : rd2; 
+assign ALU_in1 = (UncondJump) ? PC : rd1;
+
 ALU DUT4 (  //combinational?
     .ALU_Operation(ALU_Operation),
-    .rd1(rd1),
-    .rd2(ALU_in2),
+    .in1(ALU_in1),
+    .in2(ALU_in2),
     .out(ALU_Out),
     .zero(zero)
 );
-assign ALU_in2 = (ALUSrc) ? {{20{imm_out[11]}}, imm_out[11:0]} : rd2; 
 
 ALU_control DUT5 (
     .instr({instr[30], funct3}),
@@ -122,8 +130,7 @@ memory_reg_file #(.NUM_WORDS(32)) DUT_Data(.clk(clk), .n_rst(n_rst),
 );
 assign writeback = (MemtoReg) ? execute_data : ALU_Out;
 assign write_data = writeback; //output of the RV32I_core
-// assign upper_imm = imm_out[31:12]; //getting rid of warning
-// logic [11:0] imm_out;
+
 imm_gen DUT7(/*.clk(clk), .n_rst(n_rst), */
     .instr(instr),
     .imm_out(imm_out)
