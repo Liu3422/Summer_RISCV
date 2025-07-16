@@ -1,43 +1,50 @@
-NOTE: This is output from godbolt for the fib_test.c file. 
-load_gp:
- auipc	gp,0x2
- addi	gp,gp,998 # 12804 <__global_pointer$>
- ret
- nop
-main:
- addi	sp,sp,-48
- sw	ra,44(sp)
- sw	s0,40(sp)
- addi	s0,sp,48
- sw	zero,-32(s0)
- li	a5,1
- sw	a5,-24(s0)
- lw	a4,-32(s0)
- lw	a5,-24(s0)
- add	a5,a5,a4
- sw	a5,-28(s0)
- li	a5,10
- sw	a5,-36(s0)
- li	a5,3
- sw	a5,-20(s0)
- j 48           #manually counted to where original code wanted to jump to. 
- lw	a5,-24(s0)
- sw	a5,-32(s0)
- lw	a5,-28(s0)
- sw	a5,-24(s0)
- lw	a4,-32(s0)
- lw	a5,-24(s0)
- add	a5,a5,a4
- sw	a5,-28(s0)
- lw	a5,-20(s0)
- addi	a5,a5,1
- sw	a5,-20(s0)
- lw	a4,-20(s0)
- lw	a5,-36(s0)
- bge a5,a4,-52 #manually counted to where original code wanted to jump to. 
- lw	a5,-24(s0)
- mv	a0,a5
- lw	ra,44(sp)
- lw	s0,40(sp)
- addi	sp,sp,48
- ret
+#     THIS IS CODE FROM MY 362 LAB9
+
+# /* void asm_fib(int *arr, uint32_t length)
+#      * Accept a pointer to an array of integer and
+#      * the length of the array, then generate fibonacci
+#      * series starting at `0` and store the result
+#      * back to the array `arr` at corresponding indices.
+#      **/
+
+#     //*arr at x10, length at x11
+    beq x10, x0, RETURN 
+    beq x11, x0, RETURN
+    INIT: 
+        li t0, 0 #t0 = prev = 0
+        li t1, 1 #t1 = curr = 1
+        li t2, 0 #t2 = i = 0
+        jal x0, FOR #go to for loop
+
+    FOR: 
+        bge t2, x11, RETURN #return if i >= length. Forgot how to get to return addr from here.
+
+        li t3, 4
+        slli t4, t2, 2 #i(byte offset) = i * 4 (to iterate) 
+        add t5, x10, t4 #index offset + *arr = i -> arr[i]
+
+        beq t2, x0, IF #if i == 0
+        li t6, 1
+        beq t2, t6, ELSE1 #else if i == 1
+        #ELSE below
+        mv t6, t1 #t6 = tmp = curr
+        add t1, t1, t0 #curr += prev
+        mv t0, t6 #prev = tmp
+        sw t1, 0(t5) #arr[i] = curr
+
+        addi t2, t2, 1 #i++
+        jal x0, FOR
+
+    IF:
+        sw t0, 0(t5) #arr[i] = prev
+        addi t2, t2, 1 #i++
+        jal x0, FOR #return to loop
+
+    ELSE1:
+        sw t1, 0(t5) #arr[i] = curr
+        addi t2, t2, 1 #i++
+        jal x0, FOR
+
+    RETURN: 
+        ret
+    ret

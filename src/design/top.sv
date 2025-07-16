@@ -44,21 +44,26 @@ always_ff @(posedge clk, negedge n_rst) begin
 
 end
 
-logic beq_cond, bne_cond, zero, UncondJump, jal_cond, jalr_cond;
+logic beq_cond, bne_cond, zero, UncondJump, jal_cond, jalr_cond, blt_cond, bge_cond, bltu_cond, bgeu_cond, branch_cond;
 logic [1:0] PCSrc;
 logic [2:0] funct3;
-/* synthesis keep */ logic [31:0] imm_out, rd1; //synthesis directive
+/* synthesis keep */ logic [31:0] imm_out, rd1, beq_value; //synthesis directive
 assign funct3 = instr[14:12];
 assign beq_cond = (PCSrc == 2'b1 & zero) & (funct3 == 3'b000); 
 assign bne_cond = (PCSrc == 2'b1 & !zero) & (funct3 == 3'b001);
+assign blt_cond = 
+assign bge_cond = 
+assign bltu_cond = 
+assign bgeu_cond = 
 assign jal_cond = (UncondJump & PCSrc == 2'b01);
 assign jalr_cond = (UncondJump & PCSrc == 2'b10);
-
+assign beq_value = {{20{imm_out[11]}}, imm_out[11:0]}; // << 1; //debug purposes
+assign branch_cond = beq_cond | bne_cond | blt_cond | bge_cond | bltu_cond | bgeu_cond;
 always_comb begin
     if (jal_cond) 
         PC_Next = PC + imm_out;
     else if(beq_cond | bne_cond) 
-        PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out
+        PC_Next = PC + beq_value; //sign extension for signed imm_out
     else if (jalr_cond) 
         PC_Next = rd1 + imm_out; 
     else

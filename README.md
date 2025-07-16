@@ -62,11 +62,8 @@ Requirements:
     Mostly done, a couple more instructions to go. 
 
     In progress: 
-    - TDD for jump instructions (jal, jalr, etc).
-        - Imm field for jal is 0
     - More complex SV testcases, like fibonacci 
-    - Test 6 cases aren't printing the PC + instr for each clk, only the last instr for some reason. 
-        -Attempted fixes: changing order of $display before/after running instructions, $display before clk, 
+
 
     Concerns:
     - When processing a jump/branch instruction, the PC still increments and the subsequent instruction is fed into the DUT. Would this be a problem?
