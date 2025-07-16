@@ -29,7 +29,9 @@ module control(
     MemWr, //1:Data at the address input is replaced by write data input. 
     MemRead, 
     MemtoReg, // writeback:  0: ALU. 1:data memory
-    UncondJump, //0: normal. 1: rd1 = PC 
+    UncondJump, //0: normal. 1: rd1 = PC + 4
+    Auipc, //0: normal. 1: rd1 = PC 
+    Unsigned, //0: signed imm. 1: unsigned imm
     output logic [1:0] ALUOp,
     PCSrc //0: PC + 4. 1: Branch Target (PC += imm_gen). ??2: PC = rs1 + imm
     );
@@ -38,20 +40,23 @@ module control(
               STORE = 7'b0100011,
               LOAD  = 7'b0000011,
               ITYPE = 7'b0010011,
-              JAL   = 7'b1101111, //work in progress. How to move PC to rd? Or PC as one of the operands as an add instr??
-              JALR  = 7'b1100111; //work in progress. funct3 = 0, use that?
+              JAL   = 7'b1101111, 
+              JALR  = 7'b1100111, 
+              LUI   = 7'b0110111,
+              AUIPC = 7'b0010111;
     always_comb begin //note: MemRead is not implemented yet.
-        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump} = 10'b0010000100; //default/common case
+        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Unsigned} = 12'b001000010000;
         case(instr)
         BTYPE: {PCSrc, ALUSrc, ALUOp, RegWr} = 6'b010010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
-        STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
-        LOAD : {MemtoReg, ALUSrc, MemRead} = 3'b110;
-        ITYPE: {ALUSrc, ALUOp} = 3'b111;
+        STORE: {MemWr, RegWr} = 2'b10; 
+        LOAD : {MemtoReg, MemRead} = 2'b10;
+        ITYPE: {ALUOp} = 2'b11;
         JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b0100111; 
         JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b1000111;
-
-        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump} = 10'b010000100; //default/common case
+        LUI  : {ALUOp, Unsigned} = 3'b001; 
+        AUIPC: {Auipc, ALUOp, Unsigned} = 4'b1001;
+        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Unsigned} = 12'b01000010000;
         endcase
     end
 endmodule

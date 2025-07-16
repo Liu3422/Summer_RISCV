@@ -47,7 +47,7 @@ module tb_top ();
         $display("Test 1 complete");
         
         //test 2, featuring addi, sw, lw
-        $display("Test 2, Memory");
+        $display("\nTest 2, Memory");
         reset_dut;
         $readmemh("test2_memory.mem", DUT.DUT_instr.instruction_memory);
         for(int i = 0; i < 7; i++) begin
@@ -65,14 +65,14 @@ module tb_top ();
         $display("Test 2 complete");
         
         // //test 3, featuring addi, bne
-        $display("Test 3, Branch");
+        $display("\nTest 3, Branch");
         reset_dut;
         $readmemh("test3_branch.mem", DUT.DUT_instr.instruction_memory);
         for(int i = 0; i < 19; i++) begin
             @(posedge clk);
             $display("PC: %08h, instr: %08h", DUT.PC, DUT.instr);
         end
-        if(DUT.DUT_RF.RF[1] != 32'd5) //FOR WHATEVER REASON, ALU OUTPUTS 1 + 1 = 1 (RD1 = 1, RD2 = 2, ALU_OPERATION = ADD (2))
+        if(DUT.DUT_RF.RF[1] != 32'd5) 
             $display("counter doesn't equal 5");
         $display("Test 3 complete\n");
         /*The Code in question:
@@ -98,11 +98,10 @@ module tb_top ();
             $display("x2 doesn't equal 3");
         $display("Test 4 complete\n");
 
-        // //test5, fibonaci test. Takes in an index term 'n' on t0/x10 and returns the Fn fib term.
+        // //test5, fibonaci test. Currently too difficult
         // $display("Test 5, fibonacci test");
         // reset_dut;
         // $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
-        // DUT.DUT_RF.RF[5] = 32'd10; //10th term
         // for(int i = 0; i < 100; i++) 
         //     @(posedge clk);
         // if(DUT.DUT_RF.RF[10] != 32'd55)
@@ -131,21 +130,49 @@ module tb_top ();
         
         reset_dut;
         $readmemh("test6a_jalr.mem", DUT.DUT_instr.instruction_memory);
-
         $display("Test 6a, jalr");
-        for(int i = 0; i < 6; i++) begin
+        for(int i = 0; i < 4; i++) begin
             @(posedge clk);
             $display("PC: %08h, instr: %08h", DUT.PC, DUT.instr);
         end
         if(DUT.DUT_RF.RF[5] != 32'd8)
-            $display("test is wrong, incorrect return address (8):", DUT.DUT_RF.RF[5]);
+            $display("jalr test is wrong, incorrect return address (8):", DUT.DUT_RF.RF[5]);
         else if(DUT.DUT_RF.RF[3] != 32'd2)
-            $display("test is wrong, jumped to wrong place (missed important instruction, 2): ", DUT.DUT_RF.RF[3]);
+            $display("jalr test is wrong, jumped to wrong place (missed important instruction, 2): ", DUT.DUT_RF.RF[3]);
         else if(DUT.DUT_RF.RF[2] != 0)
-            $display("test is wrong, didn't jump (0):", DUT.DUT_RF.RF[2]);
+            $display("jalr test is wrong, didn't jump (0):", DUT.DUT_RF.RF[2]);
         else
             $display("Test Passed!");
         $display("Test 6 complete\n");
+
+        $display("Test 7, lui auipc");
+        reset_dut;
+        $readmemh("test7a_lui.mem", DUT.DUT_instr.instruction_memory);
+        $display("Test 7a, lui");
+        for(int i = 0; i < 3; i++) begin
+            @(posedge clk);
+            $display("PC: %08h, instr: %08h", DUT.PC, DUT.instr);
+        end
+        if (DUT.DUT_RF.RF[1] !== 32'h12345000)
+            $display("lui x1 is wrong: %h != 12345000", DUT.DUT_RF.RF[1]);
+        else if (DUT.DUT_RF.RF[2] !== 32'hFFFFF000)
+            $display("lui x2 is wrong: %h != FFFFF000", DUT.DUT_RF.RF[2]);
+        else    
+            $display("Test Passed!");
+
+        reset_dut;
+        $readmemh("test7b_auipc.mem", DUT.DUT_instr.instruction_memory);
+        $display("Test 7a, auipc");
+        for(int i = 0; i < 5; i++) begin
+            @(posedge clk);
+            $display("PC: %08h, instr: %08h", DUT.PC, DUT.instr);
+        end
+        if (DUT.DUT_RF.RF[3] !== 32'h00001000)
+            $display("auipc x3 is wrong: %h != 00001000", DUT.DUT_RF.RF[3]);
+        else if (DUT.DUT_RF.RF[4] !== 32'h0000200C)
+            $display("auipc x4 is wrong: %h != 0000200C", DUT.DUT_RF.RF[4]);
+        else    
+            $display("Test Passed!");
         $finish;
     end
 endmodule

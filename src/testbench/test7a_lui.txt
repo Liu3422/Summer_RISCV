@@ -1,0 +1,2 @@
+lui x1, 0x12345     # x1 = 0x12345000
+lui x2, 0xFFFFF     # x2 = 0xFFFFF000 (sign-extended, so -4096)

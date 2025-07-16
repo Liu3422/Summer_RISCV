@@ -36,13 +36,6 @@ module ALU_control( //strictly combinational?
                     SLT  = 4'b1000,
                     SLTU = 4'b1001,
 
-                    // ADDI  = 4'b0010,
-                    // ANDI  = 4'b0000,
-                    // ORI   = 4'b0001,
-                    // XORI  = 4'b0011,
-                    // SLLI  = 4'b1100,
-                    // SRLI  = 4'b1101,
-                    // SRAI  = 4'b1111,
                     SLTI  = 4'b1100,
                     SLTIU = 4'b1101;
 
@@ -62,7 +55,7 @@ module ALU_control( //strictly combinational?
             4'b1101: ALU_Operation = SRA;
             4'b0010: ALU_Operation = SLT;
             4'b0011: ALU_Operation = SLTU;
-            default: ALU_Operation = ADD; //default ALU mode
+            default: ALU_Operation = ADD; 
             endcase
         end
         2'b11: begin

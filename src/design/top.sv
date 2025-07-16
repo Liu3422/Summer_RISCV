@@ -75,7 +75,7 @@ end
     ); 
 `endif 
 
-logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg; //Control signals
+logic RegWr, ALUSrc, MemWr, MemRead, MemtoReg, Auipc, Unsigned; //Control signals
 logic [1:0] ALUOp;
 
 control DUT2 (
@@ -89,7 +89,9 @@ control DUT2 (
     .MemRead(MemRead),
     .MemtoReg(MemtoReg),
     .ALUOp(ALUOp),
-    .UncondJump(UncondJump)
+    .UncondJump(UncondJump),
+    .Auipc(Auipc),
+    .Unsigned(Unsigned)
 );
 logic [9:0] debug_control;
 assign debug_control = {PCSrc, RegWr, ALUSrc, MemWr, MemRead, MemtoReg, ALUOp, UncondJump};
@@ -109,8 +111,8 @@ decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
 logic [3:0] ALU_Operation; //output from ALU_control
 logic [31:0] ALU_Out, ALU_in1, ALU_in2; //ALU_in1: rd1 or PC. ALU_in2: rd2 or imm_gen
 
-assign ALU_in2 = (ALUSrc) ? {{20{imm_out[11]}}, imm_out[11:0]} : rd2; 
-assign ALU_in1 = (UncondJump) ? (PC + 4) : rd1; //PC of next instr, not current jump instr.
+assign ALU_in2 = (ALUSrc) ? (Unsigned ? (imm_out): {{20{imm_out[11]}}, imm_out[11:0]} ): rd2; 
+assign ALU_in1 = (UncondJump) ? (PC + 4) : (Auipc) ? PC : rd1; 
 
 ALU DUT4 (  //combinational?
     .ALU_Operation(ALU_Operation),
