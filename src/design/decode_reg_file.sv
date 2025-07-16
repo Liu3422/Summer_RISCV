@@ -28,7 +28,7 @@ module decode_reg_file(
     );
     logic [31:0] RF [31:0]; //32 registers, each 32 bits long. 
     logic [31:0] out;
-
+    //reading registers is already combinational
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
             for(int i = 1; i < 32; i++) begin //will this all be done in one clk cycle?

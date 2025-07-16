@@ -29,15 +29,17 @@ module fetch_instr#(
     );
     logic [31:0] instruction_memory [0:NUM_INSTR]; 
 
-
+    //combinational read. Since DUT is filled with instructions prior to operation, write timing is irrelevant
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
-            instr <= 0;
-            for(int i = 0; i < NUM_INSTR; i++) begin //will this all be done in one clk cycle?
+            // instr <= instruction_memory[0][31:0]; //defaults first instruction as the input.
+            for(int i = 0; i < NUM_INSTR; i++) begin 
                 instruction_memory[i] = '0;
             end
         end
-        else 
-            instr <= instruction_memory[PC / 4]; //convert from byte to word address
+        // else 
+            // instr <= instruction_memory[PC / 4]; //convert from byte to word address
     end                
+    assign instr = instruction_memory[PC / 4]; //combinational read
+
 endmodule

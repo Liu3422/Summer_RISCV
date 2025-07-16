@@ -1,4 +1,4 @@
-    jal x1, label     # PC-relative jump, x1 should get PC+4
+    jal x1, label     # PC-relative jump, x1 should get PC+4=4
     addi x2, x0, 1    # this should be skipped if jump works
 label:
     addi x3, x0, 2    # this should execute

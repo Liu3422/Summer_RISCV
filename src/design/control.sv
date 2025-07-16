@@ -48,8 +48,8 @@ module control(
         STORE: {MemWr, RegWr, ALUSrc} = 3'b101; 
         LOAD : {MemtoReg, ALUSrc, MemRead} = 3'b110;
         ITYPE: {ALUSrc, ALUOp} = 3'b111;
-        JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b0100111; //try sub, bc b-type is also sub
-        JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b1010111;
+        JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b0100111; 
+        JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b1000111;
 
         default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump} = 10'b010000100; //default/common case
         endcase

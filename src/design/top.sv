@@ -24,7 +24,7 @@ module top(
     input logic clk, n_rst,
     output logic [31:0] write_data
     ); 
-
+logic PC_wait; //hardcode PC increments only after the first instr.
 logic [31:0] PC;
 logic [31:0] PC_Next;
 logic [31:0] instr; 
@@ -32,10 +32,16 @@ logic [31:0] instr;
 // assign n_rst = n_rst1 | CPU_RESET; //trying C12 button on Nexys A7
 
 always_ff @(posedge clk, negedge n_rst) begin 
-    if(!n_rst) 
+    if(!n_rst) begin
         PC <= 0;
-    else
-        PC <= PC_Next; 
+        PC_wait <= 0;
+    end
+    else begin
+        if(PC_wait)
+            PC <= PC_Next;
+        PC_wait <= 1'b1;
+    end
+
 end
 
 logic beq_cond, bne_cond, zero, UncondJump, jal_cond, jalr_cond;
@@ -49,12 +55,12 @@ assign jal_cond = (UncondJump & PCSrc == 2'b01);
 assign jalr_cond = (UncondJump & PCSrc == 2'b10);
 
 always_comb begin
-    if (jal_cond) //jal
+    if (jal_cond) 
         PC_Next = PC + imm_out;
     else if(beq_cond | bne_cond) 
-        PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out. Currently only supports B-type and I type jalr
-    else if (jalr_cond) //jalr
-        PC_Next = ALU_Out; //jalr
+        PC_Next = PC + ({{20{imm_out[11]}}, imm_out[11:0]} << 1); //sign extension for signed imm_out
+    else if (jalr_cond) 
+        PC_Next = rd1 + imm_out; 
     else
         PC_Next = PC + 4;
 end
@@ -104,7 +110,7 @@ logic [3:0] ALU_Operation; //output from ALU_control
 logic [31:0] ALU_Out, ALU_in1, ALU_in2; //ALU_in1: rd1 or PC. ALU_in2: rd2 or imm_gen
 
 assign ALU_in2 = (ALUSrc) ? {{20{imm_out[11]}}, imm_out[11:0]} : rd2; 
-assign ALU_in1 = (UncondJump) ? PC : rd1;
+assign ALU_in1 = (UncondJump) ? (PC + 4) : rd1; //PC of next instr, not current jump instr.
 
 ALU DUT4 (  //combinational?
     .ALU_Operation(ALU_Operation),

@@ -1,5 +1,5 @@
 addi x1, x0, 12     # x1 = jump target address
-jalr x5, x1, 0      # jump to address 12(x1 + 0), x5 = return addr
+jalr x5, x1, 0      # jump to address 12(x1 + 0), x5 = return addr (8)
 addi x2, x0, 1      # should be skipped              
 nop                 # jump lands here (addr 12)
 addi x3, x0, 2 
