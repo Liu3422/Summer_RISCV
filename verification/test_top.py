@@ -12,6 +12,9 @@ from bitstring import Bits, BitArray, pack
 MAX_32B_signed = 2**31 - 1
 MIN_32B_signed = -(2**31)
 SHIFT_MASK = 0x1F
+BYTE_MASK = 0xFF
+HALF_MASK = 0xFFFF
+# WORD_MASK = 0xFFFFFFFF #Do you even need this?
 
 class node(): #to be used for linked list
     def __init__(self, key, value, next_node=None):
@@ -68,14 +71,14 @@ async def reset_dut(dut):
 op = {
     Bits(bin="0110011", length=7) : "R-Type",
     Bits(bin="0010011", length=7) : "I-Type",
-    Bits(bin="0000011", length=7) : "I-Type", #load, change name?
+    Bits(bin="0000011", length=7) : "I-Type Load", #load, change name?
     Bits(bin="0100011", length=7) : "S-Type", 
     Bits(bin="1100011", length=7) : "B-Type",
     Bits(bin="1101111", length=7) : "J-Type",
     Bits(bin="1100111", length=7) : "I-Type",
     Bits(bin="0110111", length=7) : "U-Type",
     Bits(bin="0010111", length=7) : "U-Type",
-    Bits(bin="1110011", length=7) : "I-Type"
+    # Bits(bin="1110011", length=7) : "I-Type" #irrelevant for this implementation.
 }
 
 Rfunct3 = { #first entry is funct7=0, second is funct7=0x20
@@ -89,6 +92,14 @@ Rfunct3 = { #first entry is funct7=0, second is funct7=0x20
     Bits(uint="5", length=3) : ["srl", "sra"],
     Bits(uint="6", length=3) : ["or"], 
     Bits(uint="7", length=3) : ["and"],
+}
+
+Mfunct3 = { #load and store funct3 conversion. NOTE: store only has 0,1,2, for funct3
+    Bits(uint="0", length=3) : ["lb", "sb", "Byte"],
+    Bits(uint="1", length=3) : ["lh", "sh", "Half"],
+    Bits(uint="2", length=3) : ["lw", "sw", "Word"],
+    Bits(uint="4", length=3) : ["lbu", "Unsigned-Byte"],
+    Bits(uint="5", length=3) : ["lhu", "Unsigned-Half"]
 }
 
 ALU_Operation = {
@@ -127,7 +138,11 @@ class dut_fetch():
         print(f"ALU_Operation: {ALU_Operation[DUT.ALU_Operation.value.integer]}")
         print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
         # print(f"RegWr: {signals[1]}")
-    
+    def memory(DUT, rs1, imm):
+        return DUT.DUT_Data.data_memory[rs1 + imm].value.integer #changed to integer due to indexing errors
+    # def unsigned_memory(DUT, rs1, imm):
+        # return DUT.DUT_Data.data_memory[rs1.int + imm.int].value.integer
+        
 class instruction():
     def __init__(self):
         # self.instr_type = instr_type
@@ -180,7 +195,22 @@ class instruction():
         return self
     
     def gen_I_instr(self): #generates the I-type instr
-        return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, Bits(bin="0010011", length=7)])
+        return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, self.opcode])
+    
+    def gen_I_load(self): #generates a random I-type load test
+        self = self.gen_random()
+        self.opcode = Bits(bin="0000011", length=7)
+        self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
+        return self
+    
+    def gen_S(self):
+        self = self.gen_random()
+        self.opcode = Bits(bin="0100011", length=7)
+        self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
+        return self
+    
+    def gen_S_instr(self):
+        return Bits().join([self.imm[5:11], self.rs2, self.rs1, self.funct3, self.imm[0:4], Bits(bin="0100011", length=7)])
     
     def bin(self): #generates the binary instruction
         match op[self.opcode]:
@@ -188,11 +218,16 @@ class instruction():
                 return (self.gen_R_instr()).bin
             case "I-Type":
                 return (self.gen_I_instr()).bin
+            case "I-Type Load":
+                return (self.gen_I_instr()).bin
+            case "S-Type":
+                return (self.gen_S_instr()).bin
     
     def decode(self, index): #prints instr-type, name, register nums, imm value, and instruction binary
         #find opcode/instruction type. Only R and I currently
         print(f"Test {index}")
         print(f"Instruction type: {op[self.opcode]}")
+        word_imm = self.imm[0:12] #sanity check
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
@@ -206,18 +241,27 @@ class instruction():
                     print(f"Name: srai")
                 elif(Rfunct3[self.funct3][0] == "sltu"): #sltiu is unsigned
                     print(f"Name: sltiu")
-                    print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={(self.imm[0:12]).uint}")
+                    print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.uint}")
                     return
                 else:
                     print(f"Name: {Rfunct3[self.funct3][0] + "i"}")
-                actual_imm = self.imm[0:12] #sanity check
-                print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={actual_imm.int}")
+                print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
+            case "I-Type Load":
+                print(f"Name: {Mfunct3[self.funct3][0]}")
+                if((Mfunct3[self.funct3][0]) == "lbu" or Mfunct3[self.funct3][0] == "lhu"): 
+                    print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.uint}")
+                else:
+                    print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
+            case "S-Type":
+                print(f"Name: {Mfunct3[self.funct3][1]}")
+                print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={word_imm.int}")
 
         print(f"Instruction: {(self.bin())}")
                 
-    def model_rd(self, prior): #returns the expected rd value
+    def model_rd(self, prior, DUT): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
         rd1 = (prior[1])
+        # unsigned_memory_load = dut_fetch.unsigned_memory(DUT, prior[1], prior[0])
         match op[self.opcode]: #setting rd2 operand
             case "R-Type":
                 if(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
@@ -231,21 +275,37 @@ class instruction():
                     field = self.imm.int & SHIFT_MASK
                 else:
                     field = (self.imm[0:12]).int
+            case "I-Type Load": #value to be loaded into rd
+                # memory_load= dut_fetch.memory(DUT, prior[1], prior[0])
+                match Mfunct3[self.funct3][0]:
+                    case "lb" : field = prior[0] & BYTE_MASK
+                    case "lh" : field = prior[0] & HALF_MASK
+                    case "lw" : field = prior[0]
+                    case "lbu": field = prior[0] & BYTE_MASK
+                    case "lhu": field = prior[0] & HALF_MASK
+            case "S-Type":
+                match Mfunct3[self.funct3][1]: #value to be stored in memory
+                    case "sb" : field = prior[1] & BYTE_MASK
+                    case "sh" : field = prior[1] & HALF_MASK
+                    case "sw" : field = prior[1]
         try:
-            match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
-                case "add":
-                    if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
-                    else: return rd1 + field 
-                case "sll": return lshift(rd1, field) #rd1 << field 
-                case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
-                case "sltu": return 1 if (rd1 < field) else 0
-                case "xor": return rd1 ^ field
-                case "srl": #NOTE: python's >> is arithmetic
-                    if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
-                    else: return rshift(rd1, field) #logical
-                case "or": return (rd1 | field)
-                case "and": return (rd1 & field)
-                case default: print(f"Model Error")
+            if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
+                match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
+                    case "add":
+                        if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
+                        else: return rd1 + field 
+                    case "sll": return lshift(rd1, field) #rd1 << field 
+                    case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
+                    case "sltu": return 1 if (rd1 < field) else 0
+                    case "xor": return rd1 ^ field
+                    case "srl": #NOTE: python's >> is arithmetic
+                        if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
+                        else: return rshift(rd1, field) #logical
+                    case "or": return (rd1 | field)
+                    case "and": return (rd1 & field)
+                    case default: print(f"Model Error")
+            elif(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
+                return field
         except Exception as e:
             print(f"Error occured on {Rfunct3[self.funct3][0]}. Probably negative shift error \n {e}")
             return 0
@@ -282,7 +342,22 @@ class instruction():
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, rs1={rs1}")
                     return [rd, rs1]
-        
+            case "I-Type Load":
+                memory = dut_fetch.memory(DUT, self.rs1.int, self.imm.int) #called inside here to avoid calling during other instructions (index error)
+                if(operation == "post"):
+                    print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}, M={memory}")
+                    return [memory, rd, rs1, imm]
+                elif(operation == "pre"):
+                    print(f"Pre-instruction: rd={rd}, rs1={rs1}") #no immediate displayed here, less information available
+                    return [memory, rd, rs1]
+            case "S-Type":
+                memory = dut_fetch.memory(DUT, self.rs1.int, self.imm.int)
+                if(operation == "post"):
+                    print(f"Actual: M={memory}, rs1={rs1}, imm={imm}, rs2={rs2}")
+                    return [memory, rs1, imm, rs2]
+                elif(operation == "pre"):
+                    print(f"Pre-instruction: rs1={rs1}, rs2={rs2}")
+                    return [rs1, rs2] #no imm value to obtain before clk 
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
         print(f"Expected rd: {expected}")
         if(expected) != (actual[0]):
@@ -294,8 +369,11 @@ class instruction():
             uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
+            memory = dut_fetch.memory(dut, self.rs1, imm)
+            u_memory = dut_fetch.memory(dut, self.rs1, uint_imm)
             print(f"final={final}, rd1={rs1}, imm={imm}")
             print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}\n")
+            print(f"memory={memory}, unsigned_memory={memory}")
         else:
             print(f"Success! \n")
         return
@@ -303,7 +381,7 @@ class instruction():
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
         dut.instr_cocotb.value = int(self.bin(), 2)        
 
-@cocotb.test()
+# @cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -325,7 +403,7 @@ async def R_I_OOP_test(dut):
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model_rd(prior) #expected rd value
+        expected = instr.model_rd(prior, dut) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
@@ -336,4 +414,29 @@ async def R_I_OOP_test(dut):
             await reset_dut(dut)
         else:
             instr.checker(expected, actual, dut)
+
+@cocotb.test()
+async def Memory_instr_test(dut): #naive same testbench format as R & I type
+    """Test for load and store instructions"""
+    cocotb.start_soon(generate_clock(dut))
+    await reset_dut(dut) 
+    for i in range(100):
+        test = instruction()
+        instr_type = random.choice([0,1])
+        if(instr_type == 0):
+            instr = test.gen_I_load()
+        else:
+            instr = test.gen_S()
+            
+        instruction.decode(instr, i)
         
+        instr.feed(dut)
+        
+        prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd register values of DUT
+
+        await RisingEdge(dut.clk) 
+        await Timer(10, units="ns")
+        
+        expected = instr.model_rd(prior, DUT) #expected rd value
+        actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+        instr.checker(expected, actual, dut)
