@@ -21,38 +21,32 @@
 
 // x0 SHOULD BE HARDWIRED TO ZERO
 module memory_reg_file#(
-    parameter NUM_WORDS = 32
+    parameter NUM_WORDS = 1024
     ) (
     input logic clk, n_rst, MemWr, MemRead,
     input logic [31:0] addr, write_data,
     output logic [31:0] execute_data
     );
-    logic [31:0] data_memory [NUM_WORDS:0];
+    logic [31:0] data_memory [0:NUM_WORDS];
     logic [31:0] out;
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
             execute_data <= 32'b0;
+            for(int i = 0; i < NUM_WORDS; i++) begin 
+                data_memory[i] <= 'b0;
+            end
         end
         else begin
             execute_data <= out;
+            if (MemWr)
+                data_memory[addr] <= write_data;
         end
-    end
-
-    always_ff @(posedge clk, negedge n_rst) begin
-        if(!n_rst) begin
-            for(int i = 0; i < NUM_WORDS; i++) begin
-                data_memory[i] <= 32'b0;
-            end
-        end
-        else if(MemWr) 
-            data_memory[addr] <= write_data;
     end
 
     always_comb begin 
         if(MemWr) begin
             out = write_data;
-            // data_memory[addr] = write_data; //does this line work?
         end
         else if(MemRead)
             out = data_memory[addr];

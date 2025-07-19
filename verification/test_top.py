@@ -14,6 +14,7 @@ MIN_32B_signed = -(2**31)
 SHIFT_MASK = 0x1F
 BYTE_MASK = 0xFF
 HALF_MASK = 0xFFFF
+NUM_WORDS = 64
 # WORD_MASK = 0xFFFFFFFF #Do you even need this?
 
 class node(): #to be used for linked list
@@ -54,8 +55,30 @@ async def reset_dut(dut):
     await Timer(10, units="ns")
     dut.n_rst.value = 1
     await Timer(10, units="ns")
-    return
+    # dut = dut_fetch.randomize_RF(dut)
+    # dut = dut_fetch.randomize_data(dut)
+    return #dut
+
+async def randomize_rf(dut):
+    print("Randomizing DUT \n")
+    dut = dut_fetch.randomize_RF(dut)
+    await RisingEdge(dut.clk) 
+    await Timer(10, units="ns")
+    return 
+
+async def randomize_data(dut):
+    print("Randomizing DUT \n")
+    dut = dut_fetch.randomize_data(dut)
+    await RisingEdge(dut.clk) 
+    await Timer(10, units="ns")
+    return 
     
+async def random_reset_dut(dut):
+    print("Resetting and Randomizing DUT \n")
+    await reset_dut(dut)
+    await randomize_data(dut)
+    await randomize_rf(dut)
+    return
 # class testcase:
 #     def __init__(self, instr_type, count, specific_instrs):
 #         self.instr_type = instr_type
@@ -118,11 +141,6 @@ ALU_Operation = {
 }
 
 class dut_fetch():
-    # def __init__(self):
-    #     self.rd1 = None
-    #     self.rd2 = None
-    #     self.out = None
-    #     self.imm = None
     def reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.signed_integer
     def unsigned_reg(DUT, bits_index):
@@ -139,9 +157,20 @@ class dut_fetch():
         print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
         # print(f"RegWr: {signals[1]}")
     def memory(DUT, rs1, imm):
-        return DUT.DUT_Data.data_memory[rs1 + imm].value.integer #changed to integer due to indexing errors
+        return DUT.DUT_Data.data_memory[rs1.uint + imm.uint].value.integer #changed to integer due to indexing errors
     # def unsigned_memory(DUT, rs1, imm):
         # return DUT.DUT_Data.data_memory[rs1.int + imm.int].value.integer
+    def randomize_RF(DUT):
+        for i in range(32):
+            DUT.DUT_RF.RF[i].value = random.getrandbits(32)
+            # print(DUT.DUT_RF.RF[i].value.integer)
+        return DUT
+    
+    def randomize_data(DUT):
+        for i in range(NUM_WORDS):
+            DUT.DUT_Data.data_memory[i].value = random.getrandbits(32)
+            # print(DUT.DUT_Data.data_memory[i].value.integer)
+        return DUT
         
 class instruction():
     def __init__(self):
@@ -201,12 +230,14 @@ class instruction():
         self = self.gen_random()
         self.opcode = Bits(bin="0000011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
+        self.imm = Bits(uint=random.choice(range(0,32)), length=12) #temporary constraint
         return self
     
     def gen_S(self):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
+        self.imm = Bits(uint=random.choice(range(0,32)), length=12) #temporary constraint
         return self
     
     def gen_S_instr(self):
@@ -343,7 +374,7 @@ class instruction():
                     print(f"Pre-instruction: rd={rd}, rs1={rs1}")
                     return [rd, rs1]
             case "I-Type Load":
-                memory = dut_fetch.memory(DUT, self.rs1.int, self.imm.int) #called inside here to avoid calling during other instructions (index error)
+                memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
                     print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}, M={memory}")
                     return [memory, rd, rs1, imm]
@@ -351,7 +382,7 @@ class instruction():
                     print(f"Pre-instruction: rd={rd}, rs1={rs1}") #no immediate displayed here, less information available
                     return [memory, rd, rs1]
             case "S-Type":
-                memory = dut_fetch.memory(DUT, self.rs1.int, self.imm.int)
+                memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
                     print(f"Actual: M={memory}, rs1={rs1}, imm={imm}, rs2={rs2}")
                     return [memory, rs1, imm, rs2]
@@ -359,7 +390,12 @@ class instruction():
                     print(f"Pre-instruction: rs1={rs1}, rs2={rs2}")
                     return [rs1, rs2] #no imm value to obtain before clk 
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
-        print(f"Expected rd: {expected}")
+        match op[self.opcode]:
+            case "R-Type": print(f"Expected rd: {expected}")
+            case "I-Type": print(f"Expected rd: {expected}")
+            case "I-Type Load": print(f"Expected rd: {expected}")
+            case "S-Type": print(f"Expected Memory: {expected}")
+            
         if(expected) != (actual[0]):
             print(f"Instruction Failed")
             dut_fetch.control(dut)
@@ -369,11 +405,11 @@ class instruction():
             uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
-            memory = dut_fetch.memory(dut, self.rs1, imm)
-            u_memory = dut_fetch.memory(dut, self.rs1, uint_imm)
+            memory = dut_fetch.memory(dut, self.rs1, self.imm)
+            # u_memory = dut_fetch.memory(dut, self.rs1, uint_imm)
             print(f"final={final}, rd1={rs1}, imm={imm}")
-            print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}\n")
-            print(f"memory={memory}, unsigned_memory={memory}")
+            print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}")
+            print(f"memory={memory}, unsigned_memory={memory} \n")
         else:
             print(f"Success! \n")
         return
@@ -385,7 +421,8 @@ class instruction():
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await reset_dut(dut) 
+    await random_reset_dut(dut)
+    
     for i in range(10000):
         test = instruction()
         instr_type = random.choice([0,1])  #randomize instruction type
@@ -419,7 +456,8 @@ async def R_I_OOP_test(dut):
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await reset_dut(dut) 
+    await random_reset_dut(dut) 
+    
     for i in range(100):
         test = instruction()
         instr_type = random.choice([0,1])
@@ -427,7 +465,7 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
             instr = test.gen_I_load()
         else:
             instr = test.gen_S()
-            
+
         instruction.decode(instr, i)
         
         instr.feed(dut)
@@ -437,6 +475,6 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model_rd(prior, DUT) #expected rd value
+        expected = instr.model_rd(prior, dut) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         instr.checker(expected, actual, dut)

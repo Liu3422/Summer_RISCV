@@ -31,14 +31,10 @@ Requirements:
     - basic overflow error + instruction error (negative shift) handling
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - every testbench component (except scoreboard) featured in the instruction() class
-    - attempting fibonacci test on SV testbench
+    - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 
     
     Future:
     - Scoreboard/log parsing
-    - Randomize state of DUT: random RF and data_memory
-        - This would be critical for having more comprehensive coverage
-        - Fill memory with random values to have more legit tests (loading 0's repeatedly...)
-        - have reset_dut randomize as well
     - Create more classes: Testcase, (idk yet) 
     - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
@@ -81,3 +77,4 @@ Requirements:
     Concerns:
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
+        -Data memory = 64 words. Instruction memory = 1024 words
