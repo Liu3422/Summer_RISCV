@@ -8,13 +8,22 @@ Requirements:
 **Cocotb**
 
     Errors:
-    - NONE!!!
+    - Model is sometimes incorrect for shifted signed values, causing preemptive resets.
+        - ex. -1921024 -> Overflow detected: 8796091101184
+        - mostly affects slli
+    - Indexing error for memory instructions.
+        - Find out the parameters of memory access. Define how much memory will be in this RV32I_core. 
+        - Have error-checking and bounds for checking whether a memory access is valid.
+
 
         RISCV Instruction Set Manual: 
         Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).
         Note: XORI rd, rs1, -1 performs a bitwise logical inversion of register rs1 (assembler pseudoinstruction NOT rd, rs).
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
+    In-Progress:
+    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
+    
     Current:
     - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
     - 1% overflow rate, 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
@@ -23,22 +32,26 @@ Requirements:
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - every testbench component (except scoreboard) featured in the instruction() class
     - attempting fibonacci test on SV testbench
-
+    
     Future:
     - Scoreboard/log parsing
-    - "Fail-mode" with truly random/incorrect instructions
-    - Randomize state of DUT: random RF?
+    - Randomize state of DUT: random RF and data_memory
+        - This would be critical for having more comprehensive coverage
+        - Fill memory with random values to have more legit tests (loading 0's repeatedly...)
+        - have reset_dut randomize as well
     - Create more classes: Testcase, (idk yet) 
-    - Store instructions into memory for DUT to fetch.
+    - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
-    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
-    - Constrained random coverage with branch instructions?
+    - Constrained random coverage with jumping instructions?
         - Extremely unpredictable behavior prone to looping.
-        
         - What exactly would this prove verification-wise?
+        Solution: only check the PC. 
+        - Would have to keep in mind PC's bounds (negative and overflow?) 
+        - Whether feeding instructions directly would still be verifying jumps
+    - "Fail-mode" with truly random/incorrect instructions
+        - Only start doing after all other instructions are done.
 
     Code Quality (in progress):
-    - Rfunct3: change to linked list so you don't have to specify [0] normally
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
     Concerns:
@@ -46,7 +59,7 @@ Requirements:
 
 **Nexys A7 100T**
 
-    Goal: output writeback (RV32I_core output) to the seven-segment displays for a customizable time. 
+    Goal: output writeback (RV32I_core output) to the seven-segment displays for a customizable time. Do this with Fibonacci, or maybe some other programs.
 
     Current:
     - No code violations with Verilator nor Vivado (xsim)
@@ -67,3 +80,4 @@ Requirements:
 
     Concerns:
     - NONE!!!
+    - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
