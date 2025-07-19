@@ -59,22 +59,11 @@ Requirements:
     - wavedroms:
         - display_controller
 **RV32I_core**
-    Mostly done, a couple more instructions to go. 
+   Completed!
 
-    In progress: 
-    - More complex SV testcases, like fibonacci 
-
+    Current: 
+    - Basic verification of all instructions.
+    - Basic program (fibonnaci) is working and verified. 
 
     Concerns:
-    - When processing a jump/branch instruction, the PC still increments and the subsequent instruction is fed into the DUT. Would this be a problem?
-    - PC increments before the testbench "officially" runs the instructions.
-    - PC increments when fetching the first instruction (during PC = 0), leading to the second instruction being fetched no matter what.
-        - It goes PC = 0 instr = 0 *CLK* PC=4, instr=(1st instr) *CLK* PC=X, instr(2nd instr)
-        - Thus, PC=4 (2nd instr) is always going to be hit, which would lead to the instruction there always being hit. 
-        Solution ideas:
-        - make fetch happen on the same clk cycle as decode, rather than the clk cycle before. 
-            - Make fetch_instr a combinational block.
-            - Better: combinational read of instr. NOTE: reading from registers is already combinational.
-        - Iterated solution: PC_wait. Hardcoded waiting to increment PC during first instruction.
-            - Problem: First instruction is now iterated twice. 
-            - Solution: Combine with combinational read of DUT_instr
+    - NONE!!!
