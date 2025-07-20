@@ -8,9 +8,6 @@ Requirements:
 **Cocotb**
 
     Errors:
-    - Model is sometimes incorrect for shifted signed values, causing preemptive resets.
-        - ex. -1921024 -> Overflow detected: 8796091101184
-        - mostly affects slli
     - Indexing error for memory instructions.
         - Find out the parameters of memory access. Define how much memory will be in this RV32I_core. 
         - Have error-checking and bounds for checking whether a memory access is valid.
@@ -26,7 +23,7 @@ Requirements:
     
     Current:
     - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
-    - 1% overflow rate, 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
+    - ~3 overflow cases (.03%), 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
     - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
     - basic overflow error + instruction error (negative shift) handling
     - hash maps for converting opcode, funct3, and ALU_Operation to names
@@ -78,3 +75,4 @@ Requirements:
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
         -Data memory = 64 words. Instruction memory = 1024 words
+    - Concurrency/parallelism with Rust?

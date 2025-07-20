@@ -45,10 +45,7 @@ module memory_reg_file#(
     end
 
     always_comb begin 
-        if(MemWr) begin
-            out = write_data;
-        end
-        else if(MemRead)
+        if(MemRead)
             out = data_memory[addr];
         else //edge case?
             out = 0;

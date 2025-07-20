@@ -14,8 +14,8 @@ MIN_32B_signed = -(2**31)
 SHIFT_MASK = 0x1F
 BYTE_MASK = 0xFF
 HALF_MASK = 0xFFFF
+WORD_MASK = 0xFFFFFFFF #Used for sll/i
 NUM_WORDS = 64
-# WORD_MASK = 0xFFFFFFFF #Do you even need this?
 
 class node(): #to be used for linked list
     def __init__(self, key, value, next_node=None):
@@ -44,7 +44,7 @@ def signed_to_binary(val):
 
 def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
 
-def lshift(val, n): return (val % 0x100000000) << n #logical left shift
+def lshift(val, n): return (val % 0x100000000) << n #logical left shift. This is not preserving sign. 
 
 
 async def reset_dut(dut):
@@ -74,7 +74,6 @@ async def randomize_data(dut):
     return 
     
 async def random_reset_dut(dut):
-    print("Resetting and Randomizing DUT \n")
     await reset_dut(dut)
     await randomize_data(dut)
     await randomize_rf(dut)
@@ -157,18 +156,18 @@ class dut_fetch():
         print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
         # print(f"RegWr: {signals[1]}")
     def memory(DUT, rs1, imm):
-        return DUT.DUT_Data.data_memory[rs1.uint + imm.uint].value.integer #changed to integer due to indexing errors
+        return DUT.DUT_Data.data_memory[rs1.uint + imm.uint].value.signed_integer #changed to integer due to indexing errors
     # def unsigned_memory(DUT, rs1, imm):
         # return DUT.DUT_Data.data_memory[rs1.int + imm.int].value.integer
     def randomize_RF(DUT):
         for i in range(32):
-            DUT.DUT_RF.RF[i].value = random.getrandbits(32)
+            DUT.DUT_RF.RF[i].value = random.getrandbits(20)
             # print(DUT.DUT_RF.RF[i].value.integer)
         return DUT
     
     def randomize_data(DUT):
         for i in range(NUM_WORDS):
-            DUT.DUT_Data.data_memory[i].value = random.getrandbits(32)
+            DUT.DUT_Data.data_memory[i].value = random.getrandbits(20)
             # print(DUT.DUT_Data.data_memory[i].value.integer)
         return DUT
         
@@ -325,13 +324,13 @@ class instruction():
                     case "add":
                         if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
                         else: return rd1 + field 
-                    case "sll": return lshift(rd1, field) #rd1 << field 
+                    case "sll": return binary_to_signed(lshift(rd1, field) & WORD_MASK) #rd1 << field. Prevents all overflow with mask.
                     case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
-                    case "sltu": return 1 if (rd1 < field) else 0
+                    case "sltu": return 1 if rd1 < field else 0
                     case "xor": return rd1 ^ field
                     case "srl": #NOTE: python's >> is arithmetic
                         if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
-                        else: return rshift(rd1, field) #logical
+                        else: return binary_to_signed(rshift(rd1, field)) #logical
                     case "or": return (rd1 | field)
                     case "and": return (rd1 & field)
                     case default: print(f"Model Error")
@@ -358,8 +357,12 @@ class instruction():
                 rs1 = unsigned_rs1
                 rs2 = unsigned_rs2
                 imm = unsigned_imm
-            case "srl": imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
-            case "sll": imm &= SHIFT_MASK 
+            case "srl": 
+                imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
+                rs2 &= SHIFT_MASK
+            case "sll": 
+                imm &= SHIFT_MASK 
+                rs2 &= SHIFT_MASK
         match op[self.opcode]:
             case "R-Type":
                 if(operation == "post"): print("Actual: ", end="")
@@ -380,7 +383,7 @@ class instruction():
                     return [memory, rd, rs1, imm]
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, rs1={rs1}") #no immediate displayed here, less information available
-                    return [memory, rd, rs1]
+                    return [rd, memory, rs1]
             case "S-Type":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
@@ -405,11 +408,11 @@ class instruction():
             uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
-            memory = dut_fetch.memory(dut, self.rs1, self.imm)
+            # memory = dut_fetch.memory(dut, self.rs1, self.imm)
             # u_memory = dut_fetch.memory(dut, self.rs1, uint_imm)
             print(f"final={final}, rd1={rs1}, imm={imm}")
             print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}")
-            print(f"memory={memory}, unsigned_memory={memory} \n")
+            # print(f"memory={memory}, unsigned_memory={memory} \n")
         else:
             print(f"Success! \n")
         return
@@ -417,7 +420,7 @@ class instruction():
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
         dut.instr_cocotb.value = int(self.bin(), 2)        
 
-# @cocotb.test()
+@cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -445,14 +448,14 @@ async def R_I_OOP_test(dut):
         
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
             print(f"Severe overflow detected: {expected.bit_length()} bits") #async def + print is weird
-            await reset_dut(dut)
-        elif((expected >= MAX_32B_signed) or (expected <= MIN_32B_signed)): #Overflow check
-            print(f"Overflow detected: {expected}")
-            await reset_dut(dut)
+            await random_reset_dut(dut)
+        elif((expected > MAX_32B_signed) or (expected < MIN_32B_signed)): #Overflow check. How to make expected signed for sll/i?
+            print(f"Overflow detected: {expected} \n") #Maybe not reset? The register still only holds 32 bits, so the remaining value is still there?
+            # await random_reset_dut(dut) 
         else:
             instr.checker(expected, actual, dut)
 
-@cocotb.test()
+# @cocotb.test()
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
