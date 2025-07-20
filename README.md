@@ -27,11 +27,11 @@ Requirements:
     - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
     - basic overflow error + instruction error (negative shift) handling
     - hash maps for converting opcode, funct3, and ALU_Operation to names
-    - every testbench component (except scoreboard) featured in the instruction() class
+    - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 
+    - Claude coded the entirety of the log parser (parser.py). Do I want to code my own in the future?
     
     Future:
-    - Scoreboard/log parsing
     - Create more classes: Testcase, (idk yet) 
     - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
@@ -75,4 +75,3 @@ Requirements:
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
         -Data memory = 64 words. Instruction memory = 1024 words
-    - Concurrency/parallelism with Rust?

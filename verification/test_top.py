@@ -15,7 +15,7 @@ SHIFT_MASK = 0x1F
 BYTE_MASK = 0xFF
 HALF_MASK = 0xFFFF
 WORD_MASK = 0xFFFFFFFF #Used for sll/i
-NUM_WORDS = 64
+NUM_WORDS = 32
 
 class node(): #to be used for linked list
     def __init__(self, key, value, next_node=None):
@@ -288,7 +288,7 @@ class instruction():
 
         print(f"Instruction: {(self.bin())}")
                 
-    def model_rd(self, prior, DUT): #returns the expected rd value
+    def model(self, prior, DUT): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
         rd1 = (prior[1])
         # unsigned_memory_load = dut_fetch.unsigned_memory(DUT, prior[1], prior[0])
@@ -367,22 +367,22 @@ class instruction():
             case "R-Type":
                 if(operation == "post"): print("Actual: ", end="")
                 elif(operation == "pre"): print("Pre-instruction: ", end="")
-                print(f"rd={rd}, rs1={rs1}, rs2={rs2}")
+                print(f"rd={rd}, rd1={rs1}, rd2={rs2}")
                 return [rd, rs1, rs2]
             case "I-Type":
                 if(operation == "post"): #irrelevant prior imm field ignored
-                    print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}")
+                    print(f"Actual: rd={rd}, rd1={rs1}, imm={imm}")
                     return [rd, rs1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, rs1={rs1}")
+                    print(f"Pre-instruction: rd={rd}, rd1={rs1}")
                     return [rd, rs1]
             case "I-Type Load":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, rs1={rs1}, imm={imm}, M={memory}")
+                    print(f"Actual: rd={rd}, rd1={rs1}, imm={imm}, M={memory}")
                     return [memory, rd, rs1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, rs1={rs1}") #no immediate displayed here, less information available
+                    print(f"Pre-instruction: rd={rd}, rd1={rs1}") #no immediate displayed here, less information available
                     return [rd, memory, rs1]
             case "S-Type":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
@@ -443,15 +443,14 @@ async def R_I_OOP_test(dut):
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model_rd(prior, dut) #expected rd value
+        expected = instr.model(prior, dut) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
             print(f"Severe overflow detected: {expected.bit_length()} bits") #async def + print is weird
             await random_reset_dut(dut)
         elif((expected > MAX_32B_signed) or (expected < MIN_32B_signed)): #Overflow check. How to make expected signed for sll/i?
-            print(f"Overflow detected: {expected} \n") #Maybe not reset? The register still only holds 32 bits, so the remaining value is still there?
-            # await random_reset_dut(dut) 
+            print(f"Overflow detected: {expected} \n") 
         else:
             instr.checker(expected, actual, dut)
 
@@ -478,6 +477,6 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model_rd(prior, dut) #expected rd value
+        expected = instr.model(prior, dut) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         instr.checker(expected, actual, dut)

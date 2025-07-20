@@ -21,7 +21,7 @@
 
 // x0 SHOULD BE HARDWIRED TO ZERO
 module memory_reg_file#(
-    parameter NUM_WORDS = 1024
+    parameter NUM_WORDS = 32
     ) (
     input logic clk, n_rst, MemWr, MemRead,
     input logic [31:0] addr, write_data,
