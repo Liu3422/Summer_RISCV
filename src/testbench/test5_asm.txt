@@ -1,5 +1,3 @@
-#     THIS IS CODE FROM MY 362 LAB9
-
 # /* void asm_fib(int *arr, uint32_t length)
 #      * Accept a pointer to an array of integer and
 #      * the length of the array, then generate fibonacci
@@ -19,8 +17,8 @@
     FOR: 
         bge t2, x11, RETURN #return if i >= length. Forgot how to get to return addr from here.
 
-#         li t3, 4
-#         slli t4, t2, 2 #i(byte offset) = i * 4 (to iterate) 
+        li t3, 4
+        slli t4, t2, 2 #i(byte offset) = i * 4 (to iterate) 
         add t5, x10, t2 #index offset + *arr = i -> arr[i]
 
         beq t2, x0, IF #if i == 0
@@ -43,5 +41,4 @@
         addi t2, t2, 1 #i++
         jal x0, FOR
     RETURN: 
-        ret
-    ret
+        j RETURN #infinitely loops after return.

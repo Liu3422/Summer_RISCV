@@ -104,7 +104,7 @@ module tb_top ();
         $readmemh("test5_fib.mem", DUT.DUT_instr.instruction_memory);
         DUT.DUT_RF.RF[10] = 32'd1; //pointer to array. Starts at top
         DUT.DUT_RF.RF[11] = 32'd11; //length of 11
-        for(int i = 0; i < 126; i++) 
+        for(int i = 0; i < 156; i++) 
             @(posedge clk);
             $display("PC: %08h, instr: %08h", DUT.PC, DUT.instr);
         if(DUT.DUT_RF.RF[6] != 32'd55)

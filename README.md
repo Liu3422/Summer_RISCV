@@ -11,15 +11,18 @@ Requirements:
     - Indexing error for memory instructions.
         - Find out the parameters of memory access. Define how much memory will be in this RV32I_core. 
         - Have error-checking and bounds for checking whether a memory access is valid.
+        - Unexpected values for addresses > 1024:
+            M[660764(rs1)+0x008(imm)]=107935
 
 
         RISCV Instruction Set Manual: 
-        Note: SLTIU rd, rs1, 1 sets rd to 1 if rs1 equals zero, otherwise sets rd to 0 (assembler pseudoinstruction SEQZ rd, rs).
-        Note: XORI rd, rs1, -1 performs a bitwise logical inversion of register rs1 (assembler pseudoinstruction NOT rd, rs).
+        The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
+and to allow auxiliary information to be stored in function pointers.
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
     In-Progress:
     - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
+
     
     Current:
     - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
@@ -30,6 +33,7 @@ Requirements:
     - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 
     - Claude coded the entirety of the log parser (parser.py). Do I want to code my own in the future?
+        - Honestly not even that useful, just a cool little log-checker. 
     
     Future:
     - Create more classes: Testcase, (idk yet) 
@@ -43,6 +47,8 @@ Requirements:
         - Whether feeding instructions directly would still be verifying jumps
     - "Fail-mode" with truly random/incorrect instructions
         - Only start doing after all other instructions are done.
+    - Use cocotb's built-in "logging" library instead of manually printing.
+        - Moving from hardcoded debug prints to OOP logging. 
 
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
@@ -74,4 +80,7 @@ Requirements:
     Concerns:
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
-        -Data memory = 64 words. Instruction memory = 1024 words
+        -Data memory = 1024 words. Instruction memory = 64 words/instructions
+        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[9:0]?
+        -Or assign data memory to 32-bit address? Kind of overkill, since that's 2^28 bytes. 
+    - Little or big endian?

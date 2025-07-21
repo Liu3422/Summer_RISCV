@@ -2,6 +2,7 @@ import os
 import random
 import sys
 from pathlib import Path
+import logging
 
 import cocotb
 from cocotb.triggers import FallingEdge, Timer, RisingEdge, ClockCycles
@@ -140,6 +141,9 @@ ALU_Operation = {
 }
 
 class dut_fetch():
+    def __init__(DUT): #maybe have access to all submodules?
+        DUT.rf = DUT.DUT_RF
+        
     def reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.signed_integer
     def unsigned_reg(DUT, bits_index):
@@ -157,8 +161,8 @@ class dut_fetch():
         # print(f"RegWr: {signals[1]}")
     def memory(DUT, rs1, imm):
         return DUT.DUT_Data.data_memory[rs1.uint + imm.uint].value.signed_integer #changed to integer due to indexing errors
-    # def unsigned_memory(DUT, rs1, imm):
-        # return DUT.DUT_Data.data_memory[rs1.int + imm.int].value.integer
+    def unsigned_memory(DUT, rs1, imm):
+        return DUT.DUT_Data.data_memory[rs1.int + imm.int].value.integer
     def randomize_RF(DUT):
         for i in range(32):
             DUT.DUT_RF.RF[i].value = random.getrandbits(20)
@@ -290,6 +294,8 @@ class instruction():
                 
     def model(self, prior, DUT): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
+        #load: prior = [M, rd, rs1, imm]
+        #store: prior =  [M, rs1, imm, rs2] ("pre" has [rs1, rs2])
         rd1 = (prior[1])
         # unsigned_memory_load = dut_fetch.unsigned_memory(DUT, prior[1], prior[0])
         match op[self.opcode]: #setting rd2 operand
@@ -306,7 +312,6 @@ class instruction():
                 else:
                     field = (self.imm[0:12]).int
             case "I-Type Load": #value to be loaded into rd
-                # memory_load= dut_fetch.memory(DUT, prior[1], prior[0])
                 match Mfunct3[self.funct3][0]:
                     case "lb" : field = prior[0] & BYTE_MASK
                     case "lh" : field = prior[0] & HALF_MASK
@@ -352,7 +357,7 @@ class instruction():
         rd = dut_fetch.reg(DUT, self.rd)
         imm = dut_fetch.imm(DUT)
         unsigned_imm = dut_fetch.unsigned_imm(DUT) & 0xFFF
-        match Rfunct3[self.funct3][0]:
+        match Rfunct3[self.funct3][0]: #This should only apply to R + I type.
             case "sltu":
                 rs1 = unsigned_rs1
                 rs2 = unsigned_rs2
@@ -379,11 +384,11 @@ class instruction():
             case "I-Type Load":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, rd1={rs1}, imm={imm}, M={memory}")
+                    print(f"Actual: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}")
                     return [memory, rd, rs1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, rd1={rs1}") #no immediate displayed here, less information available
-                    return [rd, memory, rs1]
+                    print(f"Pre-instruction: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
+                    return [memory, rd, rs1]
             case "S-Type":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
@@ -408,11 +413,16 @@ class instruction():
             uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
-            # memory = dut_fetch.memory(dut, self.rs1, self.imm)
-            # u_memory = dut_fetch.memory(dut, self.rs1, uint_imm)
+            
             print(f"final={final}, rd1={rs1}, imm={imm}")
             print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}")
-            # print(f"memory={memory}, unsigned_memory={memory} \n")
+            
+            if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
+                memory = dut_fetch.memory(dut, self.rs1, self.imm)
+                u_memory = dut_fetch.memory(dut, self.rs1, self.imm)
+                print(f"memory={memory}, unsigned_memory={u_memory}")
+                
+            print("\n")
         else:
             print(f"Success! \n")
         return
@@ -420,7 +430,7 @@ class instruction():
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
         dut.instr_cocotb.value = int(self.bin(), 2)        
 
-@cocotb.test()
+# @cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -454,7 +464,7 @@ async def R_I_OOP_test(dut):
         else:
             instr.checker(expected, actual, dut)
 
-# @cocotb.test()
+@cocotb.test()
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))

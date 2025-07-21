@@ -85,7 +85,7 @@ end
     logic [31:0] instr_cocotb;
     assign instr = instr_cocotb;
 `else
-    fetch_instr #(.NUM_INSTR(1024)) DUT_instr (.clk(clk), .n_rst(n_rst),
+    fetch_instr #(.NUM_INSTR(64)) DUT_instr (.clk(clk), .n_rst(n_rst),
         .PC(PC), 
         .instr(instr)
     ); 
@@ -143,7 +143,7 @@ ALU_control DUT5 (
 );
 
 logic [31:0] execute_data; //data memory
-memory_reg_file #(.NUM_WORDS(32)) DUT_Data(.clk(clk), .n_rst(n_rst),
+memory_reg_file #(.NUM_WORDS(1024)) DUT_Data(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
     .addr(ALU_Out),

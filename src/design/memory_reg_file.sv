@@ -34,19 +34,19 @@ module memory_reg_file#(
         if(!n_rst) begin
             execute_data <= 32'b0;
             for(int i = 0; i < NUM_WORDS; i++) begin 
-                data_memory[i] <= 'b0;
+                data_memory[i] = 'b0; // = instead of <= for verilator
             end
         end
         else begin
             execute_data <= out;
             if (MemWr)
-                data_memory[addr] <= write_data;
+                data_memory[addr / 4] <= write_data; //byte -> word address
         end
     end
 
     always_comb begin 
         if(MemRead)
-            out = data_memory[addr];
+            out = data_memory[addr / 4];
         else //edge case?
             out = 0;
     end

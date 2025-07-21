@@ -54,7 +54,23 @@ class CocotbLogParser:
             'immediate_ranges': Counter(),
             'register_value_ranges': Counter(),
             'pre_register_values': Counter(),
-            'actual_register_values': Counter()
+            'actual_register_values': Counter(),
+            # NEW: Specific range tracking for register values
+            'pre_register_value_ranges': Counter(),
+            'actual_register_value_ranges': Counter(),
+            'pre_rd_value_ranges': Counter(),
+            'pre_rs1_value_ranges': Counter(),
+            'pre_rs2_value_ranges': Counter(),
+            'actual_rd_value_ranges': Counter(),
+            'actual_rs1_value_ranges': Counter(),
+            'actual_rs2_value_ranges': Counter(),
+            # NEW: Specific value tracking by register type
+            'pre_rd_values': Counter(),
+            'pre_rs1_values': Counter(),
+            'pre_rs2_values': Counter(),
+            'actual_rd_values': Counter(),
+            'actual_rs1_values': Counter(),
+            'actual_rs2_values': Counter()
         }
 
     def parse_log_file(self, filename: str) -> None:
@@ -247,24 +263,59 @@ class CocotbLogParser:
             self.stats['rs2_usage'][test_case.rs2] += 1
             self.stats['register_usage'][test_case.rs2] += 1
         
-        # Track immediate values - FIXED: Now properly tracked
+        # Track immediate values
         if test_case.immediate is not None:
             self.stats['immediate_values'][test_case.immediate] += 1
             # Track immediate ranges
             imm_range = self.categorize_value(test_case.immediate)
             self.stats['immediate_ranges'][imm_range] += 1
         
-        # Track register values (pre-instruction)
-        for val in [test_case.pre_rd, test_case.pre_rs1, test_case.pre_rs2]:
-            if val is not None:
-                self.stats['pre_register_values'][val] += 1
-                val_range = self.categorize_value(val)
-                self.stats['register_value_ranges'][val_range] += 1
+        # Track pre-instruction register values with detailed range analysis
+        if test_case.pre_rd is not None:
+            self.stats['pre_register_values'][test_case.pre_rd] += 1
+            self.stats['pre_rd_values'][test_case.pre_rd] += 1
+            val_range = self.categorize_value(test_case.pre_rd)
+            self.stats['register_value_ranges'][val_range] += 1
+            self.stats['pre_register_value_ranges'][val_range] += 1
+            self.stats['pre_rd_value_ranges'][val_range] += 1
+            
+        if test_case.pre_rs1 is not None:
+            self.stats['pre_register_values'][test_case.pre_rs1] += 1
+            self.stats['pre_rs1_values'][test_case.pre_rs1] += 1
+            val_range = self.categorize_value(test_case.pre_rs1)
+            self.stats['register_value_ranges'][val_range] += 1
+            self.stats['pre_register_value_ranges'][val_range] += 1
+            self.stats['pre_rs1_value_ranges'][val_range] += 1
+            
+        if test_case.pre_rs2 is not None:
+            self.stats['pre_register_values'][test_case.pre_rs2] += 1
+            self.stats['pre_rs2_values'][test_case.pre_rs2] += 1
+            val_range = self.categorize_value(test_case.pre_rs2)
+            self.stats['register_value_ranges'][val_range] += 1
+            self.stats['pre_register_value_ranges'][val_range] += 1
+            self.stats['pre_rs2_value_ranges'][val_range] += 1
         
-        # Track register values (actual results)
-        for val in [test_case.actual_rd, test_case.actual_rs1, test_case.actual_rs2]:
-            if val is not None:
-                self.stats['actual_register_values'][val] += 1
+        # Track actual register values with detailed range analysis
+        if test_case.actual_rd is not None:
+            self.stats['actual_register_values'][test_case.actual_rd] += 1
+            self.stats['actual_rd_values'][test_case.actual_rd] += 1
+            val_range = self.categorize_value(test_case.actual_rd)
+            self.stats['actual_register_value_ranges'][val_range] += 1
+            self.stats['actual_rd_value_ranges'][val_range] += 1
+            
+        if test_case.actual_rs1 is not None:
+            self.stats['actual_register_values'][test_case.actual_rs1] += 1
+            self.stats['actual_rs1_values'][test_case.actual_rs1] += 1
+            val_range = self.categorize_value(test_case.actual_rs1)
+            self.stats['actual_register_value_ranges'][val_range] += 1
+            self.stats['actual_rs1_value_ranges'][val_range] += 1
+            
+        if test_case.actual_rs2 is not None:
+            self.stats['actual_register_values'][test_case.actual_rs2] += 1
+            self.stats['actual_rs2_values'][test_case.actual_rs2] += 1
+            val_range = self.categorize_value(test_case.actual_rs2)
+            self.stats['actual_register_value_ranges'][val_range] += 1
+            self.stats['actual_rs2_value_ranges'][val_range] += 1
 
     def print_summary(self) -> None:
         """Print a summary of parsed results"""
@@ -306,7 +357,7 @@ class CocotbLogParser:
         for reg, count in self.stats['rs2_usage'].most_common(5):
             print(f"    r{reg}: {count} times")
         
-        # NEW: Print immediate value statistics
+        # Print immediate value statistics
         if self.stats['immediate_values']:
             print(f"\nIMMEDIATE VALUE STATISTICS:")
             print(f"  Total instructions with immediates: {sum(self.stats['immediate_values'].values())}")
@@ -317,6 +368,61 @@ class CocotbLogParser:
             print(f"\n  Immediate Value Ranges:")
             for range_name, count in self.stats['immediate_ranges'].most_common():
                 print(f"    {range_name}: {count} times")
+        
+        # NEW: Print detailed register value statistics
+        if self.stats['pre_register_values']:
+            print(f"\nPRE-INSTRUCTION REGISTER VALUE STATISTICS:")
+            print(f"  Total pre-instruction register values: {sum(self.stats['pre_register_values'].values())}")
+            print(f"  Most Common Pre-Instruction Values:")
+            for val, count in self.stats['pre_register_values'].most_common(10):
+                print(f"    {val}: {count} times")
+            
+            print(f"\n  Pre-Instruction Value Ranges:")
+            for range_name, count in self.stats['pre_register_value_ranges'].most_common():
+                print(f"    {range_name}: {count} times")
+            
+            # Detailed breakdown by register type
+            if self.stats['pre_rd_values']:
+                print(f"\n  Pre-RD Value Ranges:")
+                for range_name, count in self.stats['pre_rd_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
+            
+            if self.stats['pre_rs1_values']:
+                print(f"\n  Pre-RS1 Value Ranges:")
+                for range_name, count in self.stats['pre_rs1_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
+                    
+            if self.stats['pre_rs2_values']:
+                print(f"\n  Pre-RS2 Value Ranges:")
+                for range_name, count in self.stats['pre_rs2_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
+        
+        if self.stats['actual_register_values']:
+            print(f"\nACTUAL REGISTER VALUE STATISTICS:")
+            print(f"  Total actual register values: {sum(self.stats['actual_register_values'].values())}")
+            print(f"  Most Common Actual Values:")
+            for val, count in self.stats['actual_register_values'].most_common(10):
+                print(f"    {val}: {count} times")
+            
+            print(f"\n  Actual Value Ranges:")
+            for range_name, count in self.stats['actual_register_value_ranges'].most_common():
+                print(f"    {range_name}: {count} times")
+            
+            # Detailed breakdown by register type
+            if self.stats['actual_rd_values']:
+                print(f"\n  Actual RD Value Ranges:")
+                for range_name, count in self.stats['actual_rd_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
+                    
+            if self.stats['actual_rs1_values']:
+                print(f"\n  Actual RS1 Value Ranges:")
+                for range_name, count in self.stats['actual_rs1_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
+                    
+            if self.stats['actual_rs2_values']:
+                print(f"\n  Actual RS2 Value Ranges:")
+                for range_name, count in self.stats['actual_rs2_value_ranges'].most_common():
+                    print(f"    {range_name}: {count} times")
 
     def get_failed_tests(self) -> List[TestCase]:
         """Return list of failed test cases"""
@@ -334,7 +440,13 @@ class CocotbLogParser:
             'registers_used': Counter([tc.rd for tc in matching_tests if tc.rd is not None] +
                                     [tc.rs1 for tc in matching_tests if tc.rs1 is not None] +
                                     [tc.rs2 for tc in matching_tests if tc.rs2 is not None]),
-            'immediate_values': Counter([tc.immediate for tc in matching_tests if tc.immediate is not None])
+            'immediate_values': Counter([tc.immediate for tc in matching_tests if tc.immediate is not None]),
+            'pre_register_values': Counter([tc.pre_rd for tc in matching_tests if tc.pre_rd is not None] +
+                                         [tc.pre_rs1 for tc in matching_tests if tc.pre_rs1 is not None] +
+                                         [tc.pre_rs2 for tc in matching_tests if tc.pre_rs2 is not None]),
+            'actual_register_values': Counter([tc.actual_rd for tc in matching_tests if tc.actual_rd is not None] +
+                                            [tc.actual_rs1 for tc in matching_tests if tc.actual_rs1 is not None] +
+                                            [tc.actual_rs2 for tc in matching_tests if tc.actual_rs2 is not None])
         }
 
     def export_to_json(self, filename: str) -> None:
@@ -356,7 +468,21 @@ class CocotbLogParser:
                 'immediate_ranges': dict(self.stats['immediate_ranges']),
                 'register_value_ranges': dict(self.stats['register_value_ranges']),
                 'pre_register_values': dict(self.stats['pre_register_values']),
-                'actual_register_values': dict(self.stats['actual_register_values'])
+                'actual_register_values': dict(self.stats['actual_register_values']),
+                'pre_register_value_ranges': dict(self.stats['pre_register_value_ranges']),
+                'actual_register_value_ranges': dict(self.stats['actual_register_value_ranges']),
+                'pre_rd_value_ranges': dict(self.stats['pre_rd_value_ranges']),
+                'pre_rs1_value_ranges': dict(self.stats['pre_rs1_value_ranges']),
+                'pre_rs2_value_ranges': dict(self.stats['pre_rs2_value_ranges']),
+                'actual_rd_value_ranges': dict(self.stats['actual_rd_value_ranges']),
+                'actual_rs1_value_ranges': dict(self.stats['actual_rs1_value_ranges']),
+                'actual_rs2_value_ranges': dict(self.stats['actual_rs2_value_ranges']),
+                'pre_rd_values': dict(self.stats['pre_rd_values']),
+                'pre_rs1_values': dict(self.stats['pre_rs1_values']),
+                'pre_rs2_values': dict(self.stats['pre_rs2_values']),
+                'actual_rd_values': dict(self.stats['actual_rd_values']),
+                'actual_rs1_values': dict(self.stats['actual_rs1_values']),
+                'actual_rs2_values': dict(self.stats['actual_rs2_values'])
             },
             'test_cases': [
                 {
@@ -430,6 +556,10 @@ def main():
         print(f"  Registers used: {dict(analysis['registers_used'].most_common(5))}")
         if analysis['immediate_values']:
             print(f"  Immediate values: {dict(analysis['immediate_values'].most_common(5))}")
+        if analysis['pre_register_values']:
+            print(f"  Pre-register values: {dict(analysis['pre_register_values'].most_common(5))}")
+        if analysis['actual_register_values']:
+            print(f"  Actual register values: {dict(analysis['actual_register_values'].most_common(5))}")
     
     if args.export:
         log_parser.export_to_json(args.export)
