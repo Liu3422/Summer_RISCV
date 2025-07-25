@@ -24,13 +24,19 @@ module memory_reg_file#(
     parameter NUM_WORDS = 1024 //Convert to NUM_BITS?
     ) (
     input logic clk, n_rst, MemWr, MemRead,
-    input logic [10:0] addr, //byte-address
+    input logic [11:0] addr, //byte-address
     input logic [31:0] write_data,
     input logic [2:0] funct3,
     output logic [31:0] data_read
     );
-    logic [31:0] data_memory [0:NUM_WORDS]; //word-address
-    logic [31:0] out;
+    logic [31:0] data_memory [0:NUM_WORDS-1]; //word-address
+    logic [31:0] out, word_data;
+    logic [9:0] word_addr;
+    logic [1:0] byte_offset; 
+
+    assign byte_offset = addr[1:0];
+    assign word_addr = addr[11:2]; //equal to >>2, /4
+    assign word_data = data_memory[word_addr]; //debug
 
     always_ff @(posedge clk, negedge n_rst) begin
         if(!n_rst) begin
@@ -39,25 +45,42 @@ module memory_reg_file#(
             end
         end
         else begin
-            if (MemWr) //S-type
-                data_memory[addr>>2][7:0] <= write_data[7:0]; //sb
-                if(funct3 == 3'd1) //sh
-                    data_memory[addr>>2][15:8] <= write_data[15:8]; //byte -> word address
-                else if(funct3 == 3'd2) //sw
-                    data_memory[addr>>2][31:8] <= write_data[31:8]; 
+            if (MemWr) begin
+                case(byte_offset)
+                2'd0: data_memory[word_addr][7:0] <= write_data[7:0]; //sb
+                2'd1: data_memory[word_addr][15:8] <= write_data[7:0]; 
+                2'd2: data_memory[word_addr][23:16] <= write_data[7:0]; 
+                2'd3: data_memory[word_addr][31:24] <= write_data[7:0]; 
+                endcase
+            end
+                if(funct3 == 3'd1) begin //sh NOTE: byte_offset = 0 or 2 here
+                    case(byte_offset)
+                    2'd0: data_memory[word_addr][15:8] <= write_data[15:8]; //store into next byte
+                    // 2'd1: data_memory[word_addr][15:8] <= write_data[15:8]; //misaligned address
+                    2'd2: data_memory[word_addr][15:8] <= write_data[15:8]; 
+                    // 2'd3: data_memory[word_addr][15:8] <= write_data[15:8]; //misaligned address
+                    default: data_memory[word_addr][15:8] <= 'b0;
+                    endcase
+                end
+                else if(funct3 == 3'd2 & (byte_offset == 2'b0)) begin //sw NOTE: byte_offset = 0 here
+                    data_memory[word_addr][15:8] <= write_data[15:8]; //store next 3 bytes
+                    data_memory[word_addr][23:16] <= write_data[23:16]; 
+                    data_memory[word_addr][31:24] <= write_data[31:24];  
+                end        
         end
     end
 
-    always_comb begin //combinational read
-        if(MemRead)
+    always_comb begin //combinational read. 
+        if(MemRead) begin 
             case(funct3)
-            3'd0: data_read = {{24{data_memory[addr>>2][7]}}, data_memory[addr>>2][7:0]};
-            3'd1: data_read = {{16{data_memory[addr>>2][15]}}, data_memory[addr>>2][15:0]};
-            3'd2: data_read = data_memory[addr>>2][31:0];
-            3'd4: data_read = {24'b0, data_memory[addr>>2][7:0]};
-            3'd5: data_read = {16'b0, data_memory[addr>>2][15:0]};
+            3'd0: data_read = {{24{data_memory[word_addr][7]}}, data_memory[word_addr][7:0]}; //lb
+            3'd1: data_read = {{16{data_memory[word_addr][15]}}, data_memory[word_addr][15:0]}; //lh
+            3'd2: data_read = data_memory[word_addr]; //lw
+            3'd4: data_read = {24'b0, data_memory[word_addr][7:0]}; //lbu
+            3'd5: data_read = {16'b0, data_memory[word_addr][15:0]}; //lhu
             default: data_read = 0; //undefined S-type funct3
             endcase
+        end
         else //if MemtoReg and !MemRead. 
             data_read = 0;  //undefined region of operation
     end

@@ -146,7 +146,7 @@ logic [31:0] data_read; // data read from memory. Will be byte, half-word, or wo
 memory_reg_file #(.NUM_WORDS(1024)) DUT_Data(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
-    .addr(ALU_Out[10:0]),
+    .addr(ALU_Out[11:0]),
     .write_data(rd2),
     .data_read(data_read),
     .funct3(funct3)

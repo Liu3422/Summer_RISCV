@@ -20,6 +20,17 @@ Requirements:
         
         - S-type only has 30 bits for instr
             - Bits (from bitstring) slices with indexes MSB first and doesn't include end! Changed gen_s_instr and be wary where slice was used.
+        
+        - memory_reg_file has data_memory indexed by a word address, which involves addr>>2 to index.
+            - What if I want to store a byte to, say, byte address 3?
+            - Word address conversion would result in bytes always being stored at the first byte of each word. 
+            Solution: change to word addressing.
+            - Do I want to support misaligned address? Say, store word at addr 3?
+                - NO! This implementation will always assume naturally aligned addressing. It will also store the first/lowest byte of the address.
+                - This constraint must be added into cocotb. If misaligned, round down to natural alignment.
+                    - Currently constraining imm. If +rd1 leads to misalign, how to change? How to detect?
+        
+        - for lh/other load instructions, do I load upper or lower
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware

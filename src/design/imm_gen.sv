@@ -25,6 +25,7 @@ module imm_gen(
     output logic [31:0] imm_out
     );
     parameter I     = 7'b0010011,
+              LOAD  = 7'b0000011,
               S     = 7'b0100011,
               SB    = 7'b1100011,
               UJ    = 7'b1101111,
@@ -36,6 +37,7 @@ module imm_gen(
     always_comb begin
         case(opcode) //opcode
             I: imm_out        = {{20{instr[31]}}, instr[31:20]}; //sign extension
+            LOAD: imm_out     = {{20{instr[31]}}, instr[31:20]}; //identical to I, since it is I-Type
             S: imm_out        = {{20{instr[31]}}, instr[31:25], instr[11:7]};
             SB: imm_out       = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
             UJ: imm_out       = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:25], instr[24:21], 1'b0};

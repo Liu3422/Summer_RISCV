@@ -13,8 +13,8 @@ from bitstring import Bits, BitArray, pack
 MAX_32B_signed = 2**31 - 1
 MIN_32B_signed = -(2**31)
 SHIFT_MASK = 0x1F
-BYTE_MASK = 0xFF
-HALF_MASK = 0xFFFF
+BYTE_MASK = 0x000000FF
+HALF_MASK = 0x0000FFFF
 WORD_MASK = 0xFFFFFFFF #Used for sll/i
 NUM_WORDS = 32
 
@@ -160,6 +160,7 @@ class dut_fetch():
         print(f"MemtoReg: {DUT.MemtoReg}")
         print(f"MemRead: {DUT.MemRead}")
         print(f"RegWr: {DUT.RegWr}")
+        print(f"MemWr: {DUT.MemWr}")
         # print(f"RegWr: {signals[1]}")
     def memory(DUT, rs1, imm):
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.signed_integer 
@@ -167,13 +168,13 @@ class dut_fetch():
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.integer #for lbu and lhu?
     def randomize_RF(DUT):
         for i in range(32):
-            DUT.DUT_RF.RF[i].value = random.getrandbits(20)
+            DUT.DUT_RF.RF[i].value = random.getrandbits(31)
             # print(DUT.DUT_RF.RF[i].value.integer)
         return DUT
     
     def randomize_data(DUT):
         for i in range(NUM_WORDS):
-            DUT.DUT_Data.data_memory[i].value = random.getrandbits(20)
+            DUT.DUT_Data.data_memory[i].value = random.getrandbits(31)
             # print(DUT.DUT_Data.data_memory[i].value.integer)
         return DUT
         
@@ -235,14 +236,22 @@ class instruction():
         self = self.gen_random()
         self.opcode = Bits(bin="0000011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
-        self.imm = Bits(uint=random.choice(range(0,32)), length=12) #temporary constraint
+        match Mfunct3[self.funct3][0]: #natural alignment constraint
+            case "lb": self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "lh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "lw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "lbu": self.imm = Bits(uint=random.choice(range(32)), length=12) 
+            case "lhu": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
         return self
     
     def gen_S(self):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
-        self.imm = Bits(uint=random.choice(range(0,32)), length=12) #temporary constraint
+        match Mfunct3[self.funct3][1]: #natural alignment constraint
+            case "sb": self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "sh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "sw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
         return self
     
     def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
@@ -259,11 +268,11 @@ class instruction():
             case "S-Type":
                 return (self.gen_S_instr()).bin
     
-    def decode(self, index): #prints instr-type, name, register nums, imm value, and instruction binary
+    def decode(self, test_num): #prints instr-type, name, register nums, imm value, and instruction binary
         #find opcode/instruction type. Only R and I currently
-        print(f"Test {index}")
+        print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
-        word_imm = self.imm[0:11] #sanity check
+        word_imm = self.imm[0:12] #sanity check
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
@@ -386,10 +395,11 @@ class instruction():
             case "I-Type Load": 
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)<<2]={memory}")
+                    print(f"Actual: rd={rd}, M[{rs1}(rs1)+{imm}(imm)]={memory}")
                     return [rd, memory, rs1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)<<2]={memory}") #no immediate displayed here, less information available
+                    print(f"Pre-instruction: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
+                    print(f"Word-Address:{(rs1 + self.imm.int)>>2}, Byte-Address:{(rs1 + self.imm.int)}")
                     return [rd, memory, rs1]
             case "S-Type": #manually clk for memory to be written?
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
@@ -397,7 +407,8 @@ class instruction():
                     print(f"Actual: M={memory}, rs1={rs1}, imm={imm}, rs2={rs2}")
                     return [memory, rs1, imm, rs2]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rs1={rs1}, rs2={rs2}")
+                    print(f"Pre-instruction: M={memory}, rs1={rs1}, rs2={rs2} ")
+                    print(f"Word-Address:{(rs1 + self.imm.int)>>2}, Byte-Address:{(rs1 + self.imm.int)}")
                     return [rs1, rs2] #no imm value to obtain before clk 
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
         match op[self.opcode]:
@@ -421,7 +432,7 @@ class instruction():
             
             if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
                 memory = dut_fetch.memory(dut, self.rs1, self.imm)
-                print(f"memory={bin(memory)}")
+                print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
             print("\n")
         else:
@@ -472,7 +483,9 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
     await reset_dut(dut)
     await randomize_data(dut) 
     
-    for i in range(100):
+    for i in range(10000):
+        await randomize_rf(dut) 
+        
         test = instruction()
         instr_type = random.choice([0,1])
         if(instr_type == 0):
@@ -489,9 +502,6 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")        
         
-        await RisingEdge(dut.clk) 
-        await Timer(10, units="ns")
-        
         expected = instr.model(prior) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
-        instr.checker(expected, actual, dut)
+        instr.checker(expected, actual, dut)   
