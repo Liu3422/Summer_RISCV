@@ -50,7 +50,7 @@ module control(
         BTYPE: {PCSrc, ALUSrc, ALUOp, RegWr} = 6'b010010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr} = 2'b10; 
-        LOAD : {MemtoReg, MemRead} = 2'b10;
+        LOAD : {MemtoReg, MemRead, RegWr} = 3'b111;
         ITYPE: {ALUOp} = 2'b11;
         JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b0100111; 
         JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b1000111;

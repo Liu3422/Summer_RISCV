@@ -154,10 +154,13 @@ class dut_fetch():
         return DUT.imm_out.value.integer
     def control(DUT):
         signals = DUT.debug_control #concate of control sigs
-        print(f"Control: {signals}")
+        # print(f"Control: {signals}")
         print(f"ALUOp: {DUT.ALUOp}")
         print(f"ALU_Operation: {ALU_Operation[DUT.ALU_Operation.value.integer]}")
         print(f"ALU_Control instr: {DUT.DUT5.instr.value}")
+        print(f"MemtoReg: {DUT.MemtoReg}")
+        print(f"MemRead: {DUT.MemRead}")
+        print(f"RegWr: {DUT.RegWr}")
         # print(f"RegWr: {signals[1]}")
     def memory(DUT, rs1, imm):
         return DUT.DUT_Data.data_memory[rs1.uint + imm.uint].value.signed_integer #changed to integer due to indexing errors
@@ -294,7 +297,7 @@ class instruction():
                 
     def model(self, prior, DUT): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
-        #load: prior = [M, rd, rs1, imm]
+        #load: prior = [rd, M, rs1, imm]
         #store: prior =  [M, rs1, imm, rs2] ("pre" has [rs1, rs2])
         rd1 = (prior[1])
         # unsigned_memory_load = dut_fetch.unsigned_memory(DUT, prior[1], prior[0])
@@ -313,11 +316,11 @@ class instruction():
                     field = (self.imm[0:12]).int
             case "I-Type Load": #value to be loaded into rd
                 match Mfunct3[self.funct3][0]:
-                    case "lb" : field = prior[0] & BYTE_MASK
-                    case "lh" : field = prior[0] & HALF_MASK
-                    case "lw" : field = prior[0]
-                    case "lbu": field = prior[0] & BYTE_MASK
-                    case "lhu": field = prior[0] & HALF_MASK
+                    case "lb" : field = prior[1] & BYTE_MASK
+                    case "lh" : field = prior[1] & HALF_MASK
+                    case "lw" : field = prior[1]
+                    case "lbu": field = prior[1] & BYTE_MASK
+                    case "lhu": field = prior[1] & HALF_MASK
             case "S-Type":
                 match Mfunct3[self.funct3][1]: #value to be stored in memory
                     case "sb" : field = prior[1] & BYTE_MASK
@@ -385,10 +388,10 @@ class instruction():
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
                     print(f"Actual: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}")
-                    return [memory, rd, rs1, imm]
+                    return [rd, memory, rs1, imm]
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
-                    return [memory, rd, rs1]
+                    return [rd, memory, rs1]
             case "S-Type":
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
@@ -421,7 +424,7 @@ class instruction():
                 memory = dut_fetch.memory(dut, self.rs1, self.imm)
                 u_memory = dut_fetch.memory(dut, self.rs1, self.imm)
                 print(f"memory={memory}, unsigned_memory={u_memory}")
-                
+                print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
             print("\n")
         else:
             print(f"Success! \n")
@@ -468,7 +471,8 @@ async def R_I_OOP_test(dut):
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await random_reset_dut(dut) 
+    await reset_dut(dut)
+    await randomize_data(dut) 
     
     for i in range(100):
         test = instruction()

@@ -14,7 +14,6 @@ Requirements:
         - Unexpected values for addresses > 1024:
             M[660764(rs1)+0x008(imm)]=107935
 
-
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
 and to allow auxiliary information to be stored in function pointers.
@@ -81,6 +80,13 @@ and to allow auxiliary information to be stored in function pointers.
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
         -Data memory = 1024 words. Instruction memory = 64 words/instructions
-        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[9:0]?
-        -Or assign data memory to 32-bit address? Kind of overkill, since that's 2^28 bytes. 
+        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[10:0]?
+            - Or assign data memory to 32-bit address? Kind of overkill, since that's 2^28 bytes. 
+        - variable amount of data to store/assign in memory. 
+        - Combinational read from memory? 
+    Current iteration:
+        -11 bit addr 
+        -combinational read, clk'd write
+        -always write first byte, then write half word or full word based on funct3.
+
     - Little or big endian?

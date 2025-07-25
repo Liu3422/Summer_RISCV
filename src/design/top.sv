@@ -142,17 +142,16 @@ ALU_control DUT5 (
     .ALU_Operation(ALU_Operation)
 );
 
-logic [31:0] execute_data; //data memory
+logic [31:0] data_read; // data read from memory. Will be byte, half-word, or word
 memory_reg_file #(.NUM_WORDS(1024)) DUT_Data(.clk(clk), .n_rst(n_rst),
     .MemWr(MemWr),
     .MemRead(MemRead),
-    .addr(ALU_Out),
+    .addr(ALU_Out[10:0]),
     .write_data(rd2),
-    .execute_data(execute_data)
+    .data_read(data_read),
+    .funct3(funct3)
 );
-assign writeback = (MemtoReg) ? execute_data : ALU_Out;
-assign write_data = writeback; //output of the RV32I_core
-
+assign writeback = (MemtoReg) ? data_read: ALU_Out;
 imm_gen DUT7(
     .instr(instr),
     .imm_out(imm_out)
