@@ -9,10 +9,17 @@ Requirements:
 
     Errors:
     - Indexing error for memory instructions.
-        - Find out the parameters of memory access. Define how much memory will be in this RV32I_core. 
         - Have error-checking and bounds for checking whether a memory access is valid.
         - Unexpected values for addresses > 1024:
             M[660764(rs1)+0x008(imm)]=107935
+
+        - lb incorrectly sign-extends
+        - memory writes finish on clk, how to read during test?
+            - manually clk again if load instr.
+            - clk twice
+        
+        - S-type only has 30 bits for instr
+            - Bits (from bitstring) slices with indexes MSB first and doesn't include end! Changed gen_s_instr and be wary where slice was used.
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
@@ -88,5 +95,4 @@ and to allow auxiliary information to be stored in function pointers.
         -11 bit addr 
         -combinational read, clk'd write
         -always write first byte, then write half word or full word based on funct3.
-
     - Little or big endian?
