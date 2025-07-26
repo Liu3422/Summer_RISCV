@@ -12,25 +12,30 @@ Requirements:
         - Have error-checking and bounds for checking whether a memory access is valid.
         - Unexpected values for addresses > 1024:
             M[660764(rs1)+0x008(imm)]=107935
-
+            - Solution: constrain addressing to rd1 + imm <1024.
+            - rd1 is not changing sometimes
         - lb incorrectly sign-extends
-        - memory writes finish on clk, how to read during test?
-            - manually clk again if load instr.
-            - clk twice
         
-        - S-type only has 30 bits for instr
-            - Bits (from bitstring) slices with indexes MSB first and doesn't include end! Changed gen_s_instr and be wary where slice was used.
+    - memory_reg_file has data_memory indexed by a word address, which involves addr>>2 to index.
+        - What if I want to store a byte to, say, byte address 3?
+        - Word address conversion would result in bytes always being stored at the first byte of each word. 
+        Solution: only support naturally aligned address.
+        - Do I want to support misaligned address? Say, store word at addr 3?
+            - NO! This implementation will always assume naturally aligned addressing. It will also store the first/lowest byte of the address.
+            - This constraint must be added into cocotb. If misaligned, round down to natural alignment.
+            - Currently constraining imm. If +rd1 leads to misalign, how to change? How to detect?
+            - rd1 isn't changing for whatever reason. 
+    - model is incorrect, sometimes doesn't include the full expected half-word.
+    - Address of instr and dut aren't matching.
+        - When generating instruction + rewriting registers, cocotb doesn't get the rewritten values.
         
-        - memory_reg_file has data_memory indexed by a word address, which involves addr>>2 to index.
-            - What if I want to store a byte to, say, byte address 3?
-            - Word address conversion would result in bytes always being stored at the first byte of each word. 
-            Solution: change to word addressing.
-            - Do I want to support misaligned address? Say, store word at addr 3?
-                - NO! This implementation will always assume naturally aligned addressing. It will also store the first/lowest byte of the address.
-                - This constraint must be added into cocotb. If misaligned, round down to natural alignment.
-                    - Currently constraining imm. If +rd1 leads to misalign, how to change? How to detect?
-        
-        - for lh/other load instructions, do I load upper or lower
+    - for lh/other load instructions, do I load upper or lower
+        - Follow natural alignment rules: 
+        lb: any. 
+        lh: 0 -> lower, 2 -> upper. 
+        lw: 0 -> word (self-explanatory)
+        - This allow applies to store
+    - memory != word_data, even though they should. 
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
