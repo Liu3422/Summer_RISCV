@@ -72,11 +72,10 @@ async def randomize_data(dut, N_bits):
     await RisingEdge(dut.clk) 
     await Timer(10, units="ns")
     return 
-    
-async def random_reset_dut(dut):
+async def random_reset_dut(dut, N_bits):
     await reset_dut(dut)
-    await randomize_data(dut)
-    await randomize_rf(dut)
+    await randomize_data(dut, N_bits)
+    await randomize_rf(dut, N_bits)
     return
 # class testcase:
 #     def __init__(self, instr_type, count, specific_instrs):
@@ -145,6 +144,10 @@ class dut_fetch():
         
     def reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.signed_integer
+    def set_reg(DUT, bits_index, value): #sets a single register value, returns the DUT
+        DUT.DUT_RF.RF[bits_index.uint].value = value
+        return DUT
+    
     def unsigned_reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.integer
     def imm(DUT):
@@ -232,26 +235,37 @@ class instruction():
     def gen_I_instr(self): #generates the I-type instr
         return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, self.opcode])
     
-    def gen_I_load(self): #generates a random I-type load test
+    def gen_I_load(self, DUT): #generates a random I-type load test
         self = self.gen_random()
         self.opcode = Bits(bin="0000011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
         match Mfunct3[self.funct3][0]: #natural alignment constraint
-            case "lb": self.imm = Bits(uint=random.choice(range(32)), length=12)
-            case "lh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-            case "lw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "lb": 
+                self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "lh": 
+                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
+            case "lw": 
+                self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
             case "lbu": self.imm = Bits(uint=random.choice(range(32)), length=12) 
-            case "lhu": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "lhu": 
+                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
         return self
     
-    def gen_S(self):
+    def gen_S(self, DUT):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
         match Mfunct3[self.funct3][1]: #natural alignment constraint
             case "sb": self.imm = Bits(uint=random.choice(range(32)), length=12)
-            case "sh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-            case "sw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "sh": 
+                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
+            case "sw": 
+                self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
         return self
     
     def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
@@ -306,7 +320,7 @@ class instruction():
         #load: prior = [rd, M, rs1, imm]
         #store: prior =  [M, rs1, imm, rs2] ("pre" has [rs1, rs2])
         rd1 = (prior[1]) #only used for R-type
-        # unsigned_memory_load = dut_fetch.unsigned_memory(DUT, prior[1], prior[0])
+        # DUT values shouldn't be extracted here, only expected test values.
         match op[self.opcode]: #setting rd2 operand
             case "R-Type":
                 if(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
@@ -447,7 +461,7 @@ class instruction():
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
-    await random_reset_dut(dut)
+    await random_reset_dut(dut, 32)
     
     for i in range(10000):
         test = instruction()
@@ -466,7 +480,7 @@ async def R_I_OOP_test(dut):
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model(prior, dut) #expected rd value
+        expected = instr.model(prior) #expected rd value
         actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
@@ -490,9 +504,9 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         test = instruction()
         instr_type = random.choice([0,1])
         if(instr_type == 0):
-            instr = test.gen_I_load()
+            instr = test.gen_I_load(dut)
         else:
-            instr = test.gen_S()
+            instr = test.gen_S(dut)
 
         instruction.decode(instr, i)
         
