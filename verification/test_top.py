@@ -59,16 +59,16 @@ async def reset_dut(dut):
     # dut = dut_fetch.randomize_data(dut)
     return #dut
 
-async def randomize_rf(dut):
+async def randomize_rf(dut, N_bits):
     print("Randomizing DUT \n")
-    dut = dut_fetch.randomize_RF(dut)
+    dut = dut_fetch.randomize_RF(dut, N_bits)
     await RisingEdge(dut.clk) 
     await Timer(10, units="ns")
     return 
 
-async def randomize_data(dut):
+async def randomize_data(dut, N_bits):
     print("Randomizing DUT \n")
-    dut = dut_fetch.randomize_data(dut)
+    dut = dut_fetch.randomize_data(dut, N_bits)
     await RisingEdge(dut.clk) 
     await Timer(10, units="ns")
     return 
@@ -166,15 +166,15 @@ class dut_fetch():
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.signed_integer 
     def unsigned_memory(DUT, rs1, imm):
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.integer #for lbu and lhu?
-    def randomize_RF(DUT):
+    def randomize_RF(DUT, N_bits):
         for i in range(32):
-            DUT.DUT_RF.RF[i].value = random.getrandbits(31)
+            DUT.DUT_RF.RF[i].value = random.getrandbits(N_bits)
             # print(DUT.DUT_RF.RF[i].value.integer)
         return DUT
     
-    def randomize_data(DUT):
+    def randomize_data(DUT, N_bits):
         for i in range(NUM_WORDS):
-            DUT.DUT_Data.data_memory[i].value = random.getrandbits(31)
+            DUT.DUT_Data.data_memory[i].value = random.getrandbits(N_bits)
             # print(DUT.DUT_Data.data_memory[i].value.integer)
         return DUT
         
@@ -361,55 +361,55 @@ class instruction():
         # "post" : will print imm
         #NOTE: async to clk on S-Type
             #Problem: This makes monitor and its objects a coroutine, which then disallows instr.model to iterate through "prior"
-        rs1 = dut_fetch.reg(DUT, self.rs1)
-        rs2 = dut_fetch.reg(DUT, self.rs2)
-        unsigned_rs2 = dut_fetch.unsigned_reg(DUT, self.rs2)
-        unsigned_rs1 = dut_fetch.unsigned_reg(DUT, self.rs1)
+        rd1 = dut_fetch.reg(DUT, self.rs1)
+        rd2 = dut_fetch.reg(DUT, self.rs2)
+        unsigned_rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
+        unsigned_rd1 = dut_fetch.unsigned_reg(DUT, self.rs1)
         rd = dut_fetch.reg(DUT, self.rd)
         imm = dut_fetch.imm(DUT)
         unsigned_imm = dut_fetch.unsigned_imm(DUT) & 0xFFF
         match Rfunct3[self.funct3][0]: #This should only apply to R + I type.
             case "sltu":
-                rs1 = unsigned_rs1
-                rs2 = unsigned_rs2
+                rd1 = unsigned_rd1
+                rd2 = unsigned_rd2
                 imm = unsigned_imm
             case "srl": 
                 imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
-                rs2 &= SHIFT_MASK
+                rd2 &= SHIFT_MASK
             case "sll": 
                 imm &= SHIFT_MASK 
-                rs2 &= SHIFT_MASK
+                rd2 &= SHIFT_MASK
         match op[self.opcode]:
             case "R-Type":
                 if(operation == "post"): print("Actual: ", end="")
                 elif(operation == "pre"): print("Pre-instruction: ", end="")
-                print(f"rd={rd}, rd1={rs1}, rd2={rs2}")
-                return [rd, rs1, rs2]
+                print(f"rd={rd}, rd1={rd1}, rd2={rd2}")
+                return [rd, rd1, rd2]
             case "I-Type":
                 if(operation == "post"): #irrelevant prior imm field ignored
-                    print(f"Actual: rd={rd}, rd1={rs1}, imm={imm}")
-                    return [rd, rs1, imm]
+                    print(f"Actual: rd={rd}, rd1={rd1}, imm={imm}")
+                    return [rd, rd1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, rd1={rs1}")
-                    return [rd, rs1]
+                    print(f"Pre-instruction: rd={rd}, rd1={rd1}")
+                    return [rd, rd1]
             case "I-Type Load": 
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, M[{rs1}(rs1)+{imm}(imm)]={memory}")
-                    return [rd, memory, rs1, imm]
+                    print(f"Actual: rd={rd}, M[{rd1}(rd1)+{imm}(imm)]={memory}")
+                    return [rd, memory, rd1, imm]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: rd={rd}, M[{rs1}(rs1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
-                    print(f"Word-Address:{(rs1 + self.imm.int)>>2}, Byte-Address:{(rs1 + self.imm.int)}")
-                    return [rd, memory, rs1]
+                    print(f"Pre-instruction: rd={rd}, M[{rd1}(rd1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
+                    print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
+                    return [rd, memory, rd1]
             case "S-Type": #manually clk for memory to be written?
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
-                    print(f"Actual: M={memory}, rs1={rs1}, imm={imm}, rs2={rs2}")
-                    return [memory, rs1, imm, rs2]
+                    print(f"Actual: M={memory}, rd1={rd1}, imm={imm}, rd2={rd2}")
+                    return [memory, rd1, imm, rd2]
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: M={memory}, rs1={rs1}, rs2={rs2} ")
-                    print(f"Word-Address:{(rs1 + self.imm.int)>>2}, Byte-Address:{(rs1 + self.imm.int)}")
-                    return [rs1, rs2] #no imm value to obtain before clk 
+                    print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2} ")
+                    print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
+                    return [rd1, rd2] #no imm value to obtain before clk 
     def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
         match op[self.opcode]:
             case "R-Type": print(f"Expected rd: {expected}")
@@ -434,6 +434,7 @@ class instruction():
                 memory = dut_fetch.memory(dut, self.rs1, self.imm)
                 print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
+                print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
             print("\n")
         else:
             print(f"Success! \n")
@@ -481,10 +482,10 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
     await reset_dut(dut)
-    await randomize_data(dut) 
+    await randomize_data(dut, 32) 
     
     for i in range(10000):
-        await randomize_rf(dut) 
+        await randomize_rf(dut, 5) 
         
         test = instruction()
         instr_type = random.choice([0,1])
