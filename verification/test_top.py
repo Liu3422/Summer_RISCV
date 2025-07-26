@@ -165,7 +165,7 @@ class dut_fetch():
         print(f"RegWr: {DUT.RegWr}")
         print(f"MemWr: {DUT.MemWr}")
         # print(f"RegWr: {signals[1]}")
-    def memory(DUT, rs1, imm):
+    def memory(DUT, rs1, imm): #hardcoded word address
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.signed_integer 
     def unsigned_memory(DUT, rs1, imm):
         return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.integer #for lbu and lhu?
@@ -409,6 +409,12 @@ class instruction():
             case "I-Type Load": 
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
                 if(operation == "post"):
+                    match Mfunct3[self.funct3][0]: #monitor only the relevant place in memory
+                        case "lb" : memory &= BYTE_MASK
+                        case "lh" : memory &= HALF_MASK
+                        case "lw" : pass 
+                        case "lbu": memory &= BYTE_MASK
+                        case "lhu": memory &= HALF_MASK
                     print(f"Actual: rd={rd}, M[{rd1}(rd1)+{imm}(imm)]={memory}")
                     return [rd, memory, rd1, imm]
                 elif(operation == "pre"):
@@ -418,6 +424,9 @@ class instruction():
             case "S-Type": #manually clk for memory to be written?
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
                 if(operation == "post"):
+                    match Mfunct3[self.funct3][1]:#monitor only the relevant place in memory
+                        case "sb" : memory &= BYTE_MASK
+                        case "sh" : memory &= HALF_MASK
                     print(f"Actual: M={memory}, rd1={rd1}, imm={imm}, rd2={rd2}")
                     return [memory, rd1, imm, rd2]
                 elif(operation == "pre"):
@@ -449,6 +458,7 @@ class instruction():
                 print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
                 print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
+                print(f"word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
             print("\n")
         else:
             print(f"Success! \n")
