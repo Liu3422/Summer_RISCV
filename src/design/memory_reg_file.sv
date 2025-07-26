@@ -33,6 +33,7 @@ module memory_reg_file#(
     logic [31:0] out, word_data;
     logic [9:0] word_addr;
     logic [1:0] byte_offset; 
+    logic [15:0] half_read; //2-byte to be loaded into memory
 
     assign byte_offset = addr[1:0];
     assign word_addr = addr[11:2]; //equal to >>2, /4
@@ -72,16 +73,24 @@ module memory_reg_file#(
 
     always_comb begin //combinational read. 
         if(MemRead) begin 
+            case(byte_offset) //choosing which byte in word to read
+            2'd0: half_read = data_memory[word_addr][15:0]; //set for both lb and lh 
+            2'd1: half_read = {8'b0, data_memory[word_addr][15:8]}; //only want byte for misaligned address.
+            2'd2: half_read = data_memory[word_addr][31:16]; //set for both lb and lh 
+            2'd3: half_read = {8'b0, data_memory[word_addr][31:24]}; 
+            endcase
             case(funct3)
-            3'd0: data_read = {{24{data_memory[word_addr][7]}}, data_memory[word_addr][7:0]}; //lb
-            3'd1: data_read = {{16{data_memory[word_addr][15]}}, data_memory[word_addr][15:0]}; //lh
+            3'd0: data_read = {{24{half_read[7]}}, half_read[7:0]}; //lb
+            3'd1: data_read = {{16{half_read[15]}}, half_read}; //lh
             3'd2: data_read = data_memory[word_addr]; //lw
-            3'd4: data_read = {24'b0, data_memory[word_addr][7:0]}; //lbu
-            3'd5: data_read = {16'b0, data_memory[word_addr][15:0]}; //lhu
+            3'd4: data_read = {24'b0, half_read[7:0]}; //lbu
+            3'd5: data_read = {16'b0, half_read}; //lhu
             default: data_read = 0; //undefined S-type funct3
             endcase
         end
-        else //if MemtoReg and !MemRead. 
-            data_read = 0;  //undefined region of operation
+        else begin//if MemtoReg and !MemRead. 
+            data_read = 0; //undefined region of operation
+            half_read = 0; //avoid latch
+        end
     end
 endmodule

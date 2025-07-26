@@ -242,31 +242,36 @@ class instruction():
         match Mfunct3[self.funct3][0]: #natural alignment constraint
             case "lb": 
                 self.imm = Bits(uint=random.choice(range(32)), length=12)
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "lh": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
                 DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
             case "lw": 
                 self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
                 DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
-            case "lbu": self.imm = Bits(uint=random.choice(range(32)), length=12) 
+            case "lbu": 
+                self.imm = Bits(uint=random.choice(range(32)), length=12) 
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "lhu": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
                 DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
-        return self
+        return self, DUT
     
     def gen_S(self, DUT):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
         match Mfunct3[self.funct3][1]: #natural alignment constraint
-            case "sb": self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "sb": 
+                self.imm = Bits(uint=random.choice(range(32)), length=12)
+                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "sh": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
                 DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
             case "sw": 
                 self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
                 DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
-        return self
+        return self, DUT
     
     def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
         return Bits().join([self.imm[0:7], self.rs2, self.rs1, self.funct3, self.imm[7:12], Bits(bin="0100011", length=7)])
@@ -408,13 +413,13 @@ class instruction():
                     return [rd, rd1]
             case "I-Type Load": 
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
+                match Mfunct3[self.funct3][0]: #monitor only the relevant place in memory
+                    case "lb" : memory &= BYTE_MASK
+                    case "lh" : memory &= HALF_MASK
+                    case "lw" : pass 
+                    case "lbu": memory &= BYTE_MASK
+                    case "lhu": memory &= HALF_MASK
                 if(operation == "post"):
-                    match Mfunct3[self.funct3][0]: #monitor only the relevant place in memory
-                        case "lb" : memory &= BYTE_MASK
-                        case "lh" : memory &= HALF_MASK
-                        case "lw" : pass 
-                        case "lbu": memory &= BYTE_MASK
-                        case "lhu": memory &= HALF_MASK
                     print(f"Actual: rd={rd}, M[{rd1}(rd1)+{imm}(imm)]={memory}")
                     return [rd, memory, rd1, imm]
                 elif(operation == "pre"):
@@ -423,10 +428,10 @@ class instruction():
                     return [rd, memory, rd1]
             case "S-Type": #manually clk for memory to be written?
                 memory = dut_fetch.memory(DUT, self.rs1, self.imm)
+                match Mfunct3[self.funct3][1]:#monitor only the relevant place in memory
+                    case "sb" : memory &= BYTE_MASK
+                    case "sh" : memory &= HALF_MASK
                 if(operation == "post"):
-                    match Mfunct3[self.funct3][1]:#monitor only the relevant place in memory
-                        case "sb" : memory &= BYTE_MASK
-                        case "sh" : memory &= HALF_MASK
                     print(f"Actual: M={memory}, rd1={rd1}, imm={imm}, rd2={rd2}")
                     return [memory, rd1, imm, rd2]
                 elif(operation == "pre"):
@@ -509,14 +514,14 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
     await randomize_data(dut, 32) 
     
     for i in range(10000):
-        await randomize_rf(dut, 5) 
+        await randomize_rf(dut, 11) #11 = Num bits in addr - 1 
         
         test = instruction()
         instr_type = random.choice([0,1])
         if(instr_type == 0):
-            instr = test.gen_I_load(dut)
+            (instr, dut) = test.gen_I_load(dut)
         else:
-            instr = test.gen_S(dut)
+            (instr, dut) = test.gen_S(dut)
 
         instruction.decode(instr, i)
         
