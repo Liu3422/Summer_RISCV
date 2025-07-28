@@ -8,37 +8,14 @@ Requirements:
 **Cocotb**
 
     Errors:
-    !! rd1 value is only being rewritten after the clk cycle!
-        -Current! use li/addi instead of directly writing to DUT.
+        -M value is changing during some load instructions
+            -It usually changes to 0, and the rd also sometimes ends up as 0
+        -For the model, some sh instructions incorrectly mask
+            -Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
 
-    - Indexing error for memory instructions.
-        - Have error-checking and bounds for checking whether a memory access is valid.
-        - Unexpected values for addresses > 1024:
-            M[660764(rs1)+0x008(imm)]=107935
-            - Solution: constrain addressing to rd1 + imm <1024.
-            - rd1 is not changing sometimes
-        - lb incorrectly sign-extends
-        
-    - memory_reg_file has data_memory indexed by a word address, which involves addr>>2 to index.
-        - What if I want to store a byte to, say, byte address 3?
-        - Word address conversion would result in bytes always being stored at the first byte of each word. 
-        Solution: implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
-        - Do I want to support misaligned address? Say, store word at addr 3?
-            - NO! This implementation will always assume naturally aligned addressing. It will also always store the first/lowest byte of the address.
-            - This constraint must be added into cocotb. If misaligned, round down to natural alignment.
-            - Currently constraining imm. If +rd1 leads to misalign, how to change? How to detect?
-            - rd1 isn't changing for whatever reason. 
-    - model is incorrect, sometimes doesn't include the full expected half-word.
-    - FIXED: Address of cocotb and dut aren't matching.
-        - When generating instruction + rewriting registers, cocotb doesn't get the rewritten values.
-        
-    - for lh/other load instructions, do I load upper or lower
-        - Follow natural alignment rules: 
-        lb: any. 
-        lh: 0 -> lower, 2 -> upper. 
-        lw: 0 -> word (self-explanatory)
-        - This allow applies to store
-    - memory != word_data, even though they should. 
+    Edgecases: 
+        - rd = rs1 results in the rd1 value (used to increment in data_memory) changing. 
+            - The whole testbench is being modified to combat this, resulting in some normal tests not passing.
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
@@ -46,8 +23,19 @@ and to allow auxiliary information to be stored in function pointers.
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
     In-Progress:
-    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  
-
+    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  30% Pass rate
+    Current: Using addi instead of directly writing to DUT.
+    - constrain addressing to rd1 + imm <1024.
+    - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
+        - This constraint must be added into cocotb. If misaligned, will inform of the test and only store first byte.
+        - Currently no misaligns
+        - Follow natural alignment rules: 
+            lb: any. 
+            lh: 0 -> lower, 2 -> upper. 
+            lw: 0 -> word (self-explanatory)
+            - This allow applies to store
+    - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
+    - convert more of the program into OOP classes/objects, its getting pretty long. 
     
     Current:
     - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)

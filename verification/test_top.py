@@ -85,7 +85,7 @@ async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
     
     match Mfunct3[funct3][0]:
         case "lb": value = random.choice(range(0,992)) #NOTE: S-Type has the same randomization for funct 0,1,2
-        case "lh": value = random.choice(range(0,992,2)) #992 = 1024 (memory index max) - 32(imm max)
+        case "lh": value = random.choice(range(0,992,2)) #992 = 1024 (memory index max) - 32(imm max). >>2 results in dividing addr by 4, you can increase this.
         case "lw": value = random.choice(range(0,992,4))
         case "lbu": value = random.choice(range(0,992))
         case "lhu": value = random.choice(range(0,992,2))
@@ -167,7 +167,6 @@ class dut_fetch():
     def set_reg(DUT, bits_index, value): #sets a single register value, returns the DUT
         DUT.DUT_RF.RF[bits_index.uint].value = value
         return DUT
-    
     def unsigned_reg(DUT, bits_index):
         return DUT.DUT_RF.RF[bits_index.uint].value.integer
     def imm(DUT):
@@ -185,21 +184,46 @@ class dut_fetch():
         print(f"RegWr: {DUT.RegWr}")
         print(f"MemWr: {DUT.MemWr}")
         # print(f"RegWr: {signals[1]}")
-    def memory(DUT, rs1, imm): #hardcoded word address
-        return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.signed_integer 
-    def unsigned_memory(DUT, rs1, imm):
-        return DUT.DUT_Data.data_memory[(rs1.uint + imm.int)>>2].value.integer #for lbu and lhu?
+    def memory(DUT, rd1, imm): 
+        word_addr = (rd1 + imm)>>2
+        return DUT.DUT_Data.data_memory[word_addr].value.signed_integer 
+    def unsigned_memory(DUT, rd1, imm):
+        word_addr = (rd1 + imm)>>2
+        return DUT.DUT_Data.data_memory[word_addr].value.integer #for lbu and lhu?
     def randomize_RF(DUT, N_bits):
         for i in range(32):
             DUT.DUT_RF.RF[i].value = random.getrandbits(N_bits)
             # print(DUT.DUT_RF.RF[i].value.integer)
-        return DUT
-    
+        return DUT    
     def randomize_data(DUT, N_bits):
         for i in range(NUM_WORDS):
             DUT.DUT_Data.data_memory[i].value = random.getrandbits(N_bits)
             # print(DUT.DUT_Data.data_memory[i].value.integer)
         return DUT
+    def memory_mask(DUT, rd1, imm, funct3): #(dut_fetch.reg(rs1), dut_fetch.imm, self.funct3)
+        byte_offset = (rd1 + imm) % 4 #mask for last 2 bits
+        memory = dut_fetch.memory(DUT, rd1, imm) #called inside here to avoid calling during other instructions (index error)
+        match Mfunct3[funct3][0]: #monitor only the relevant place in memory
+            case "lb" : memory &= BYTE_MASK #NOTE: masking is identical for S-Type as well
+            case "lh" : 
+                if (byte_offset == 0):
+                    memory &= HALF_MASK
+                elif (byte_offset == 2):
+                    memory &= HALF_HIGH_MASK
+                else: #memory address misalignment
+                    print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
+                    memory &= HALF_MASK #out of region of operation
+            case "lw" : pass 
+            case "lbu": memory &= BYTE_MASK
+            case "lhu": 
+                if (byte_offset == 0):
+                    memory &= HALF_MASK
+                elif (byte_offset == 2):
+                    memory &= HALF_HIGH_MASK
+                else: #memory address misalignment
+                    print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
+                    memory &= HALF_MASK #out of region of operation
+        return memory
         
 class instruction():
     def __init__(self):
@@ -260,16 +284,11 @@ class instruction():
         self.opcode = Bits(bin="0000011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
         match Mfunct3[self.funct3][0]: #natural alignment constraint
-            case "lb": 
-                self.imm = Bits(uint=random.choice(range(32)), length=12)
-            case "lh": 
-                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-            case "lw": 
-                self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
-            case "lbu": 
-                self.imm = Bits(uint=random.choice(range(32)), length=12) 
-            case "lhu": 
-                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "lb": self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "lh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "lw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "lbu": self.imm = Bits(uint=random.choice(range(32)), length=12) 
+            case "lhu": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
         return (self, DUT)
     
     def gen_S(self, DUT):
@@ -277,12 +296,9 @@ class instruction():
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
         match Mfunct3[self.funct3][1]: #natural alignment constraint
-            case "sb": 
-                self.imm = Bits(uint=random.choice(range(32)), length=12)
-            case "sh": 
-                self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-            case "sw": 
-                self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "sb": self.imm = Bits(uint=random.choice(range(32)), length=12)
+            case "sh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
+            case "sw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
         return (self, DUT)
     
     def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
@@ -290,14 +306,10 @@ class instruction():
     
     def bin(self): #generates the binary instruction
         match op[self.opcode]:
-            case "R-Type":
-                return (self.gen_R_instr()).bin
-            case "I-Type":
-                return (self.gen_I_instr()).bin
-            case "I-Type Load":
-                return (self.gen_I_instr()).bin
-            case "S-Type":
-                return (self.gen_S_instr()).bin
+            case "R-Type": return (self.gen_R_instr()).bin
+            case "I-Type": return (self.gen_I_instr()).bin
+            case "I-Type Load": return (self.gen_I_instr()).bin
+            case "S-Type": return (self.gen_S_instr()).bin
     
     def decode(self, test_num): #prints instr-type, name, register nums, imm value, and instruction binary
         #find opcode/instruction type. Only R and I currently
@@ -307,10 +319,8 @@ class instruction():
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
-                    case 0:
-                        print(f"Name: {Rfunct3[self.funct3][0]}") 
-                    case 32:
-                        print(f"Name: {Rfunct3[self.funct3][1]}") #only place that uses self.funct3[1]
+                    case 0: print(f"Name: {Rfunct3[self.funct3][0]}") 
+                    case 32: print(f"Name: {Rfunct3[self.funct3][1]}") #only place that uses self.funct3[1]
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint} rs2={self.rs2.uint}")
             case "I-Type": 
                 if((Rfunct3[self.funct3][0] == "srl") and (self.imm.int > 1024)): #srai special case
@@ -351,18 +361,10 @@ class instruction():
                     field = self.imm.int & SHIFT_MASK
                 else:
                     field = (self.imm[0:12]).int
-            case "I-Type Load": #value to be loaded into rd
-                match Mfunct3[self.funct3][0]: #how to differentiate between sign-extend and zero fill?
-                    case "lb" : field = prior[1] & BYTE_MASK
-                    case "lh" : field = prior[1] & HALF_MASK
-                    case "lw" : field = prior[1]
-                    case "lbu": field = prior[1] & BYTE_MASK
-                    case "lhu": field = prior[1] & HALF_MASK
-            case "S-Type":
-                match Mfunct3[self.funct3][1]: #value to be stored in memory
-                    case "sb" : field = prior[1] & BYTE_MASK
-                    case "sh" : field = prior[1] & HALF_MASK
-                    case "sw" : field = prior[1]
+            #masking is now done in monitor
+            case "I-Type Load": field = prior[1]
+            case "S-Type": field = prior[1]
+                
         try:
             if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
                 match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
@@ -385,13 +387,12 @@ class instruction():
             print(f"Error occured on {Rfunct3[self.funct3][0]}. Probably negative shift error \n {e}")
             return 0
             
-    def monitor(self, DUT, operation): #returns 3 arguments read from DUT
+    def monitor(self, DUT, operation, prior_rd1=0): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         #operation: 
         # "pre"  : won't print imm 
         # "post" : will print imm
-        #NOTE: async to clk on S-Type
-            #Problem: This makes monitor and its objects a coroutine, which then disallows instr.model to iterate through "prior"
+        # prior_rd1 = prior[2]
         rd1 = dut_fetch.reg(DUT, self.rs1)
         rd2 = dut_fetch.reg(DUT, self.rs2)
         unsigned_rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
@@ -424,57 +425,26 @@ class instruction():
                     print(f"Pre-instruction: rd={rd}, rd1={rd1}")
                     return [rd, rd1]
             case "I-Type Load": 
-                byte_offset = DUT.DUT_Data.byte_offset.value.integer
-                memory = dut_fetch.memory(DUT, self.rs1, self.imm) #called inside here to avoid calling during other instructions (index error)
-                match Mfunct3[self.funct3][0]: #monitor only the relevant place in memory
-                    case "lb" : memory &= BYTE_MASK
-                    case "lh" : 
-                        if (byte_offset == 0):
-                            memory &= HALF_MASK
-                        elif (byte_offset == 2):
-                            memory &= HALF_HIGH_MASK
-                        else: #memory address misalignment
-                            print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
-                            memory &= HALF_MASK #out of region of operation
-                    case "lw" : pass 
-                    case "lbu": memory &= BYTE_MASK
-                    case "lhu": 
-                        if (byte_offset == 0):
-                            memory &= HALF_MASK
-                        elif (byte_offset == 2):
-                            memory &= HALF_HIGH_MASK
-                        else: #memory address misalignment
-                            print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
-                            memory &= HALF_MASK #out of region of operation
                 if(operation == "post"):
+                    memory = dut_fetch.memory_mask(DUT, prior_rd1, imm, self.funct3)
                     print(f"Actual: rd={rd}, M[{rd1}(rd1)+{imm}(imm)]={memory}")
-                    return [rd, memory, rd1, imm]
+                    return [rd, memory, prior_rd1, imm]
                 elif(operation == "pre"):
+                    memory = dut_fetch.memory_mask(DUT, rd1, imm, self.funct3)
                     print(f"Pre-instruction: rd={rd}, M[{rd1}(rd1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [rd, memory, rd1]
             case "S-Type": #manually clk for memory to be written?
-                memory = dut_fetch.memory(DUT, self.rs1, self.imm)
-                byte_offset = DUT.DUT_Data.byte_offset.value.integer
-                match Mfunct3[self.funct3][1]:#monitor only the relevant place in memory
-                    case "sb" : memory &= BYTE_MASK
-                    case "sh" : 
-                        if (byte_offset == 0):
-                            memory &= HALF_MASK
-                        elif (byte_offset == 2):
-                            memory &= HALF_HIGH_MASK
-                        else: #memory address misalignment
-                            print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
-                            memory &= HALF_MASK #out of region of operation
-                    case "sw" : pass
                 if(operation == "post"):
+                    memory = dut_fetch.memory_mask(DUT, prior_rd1, imm, self.funct3)
                     print(f"Actual: M={memory}, rd1={rd1}, imm={imm}, rd2={rd2}")
-                    return [memory, rd1, imm, rd2]
+                    return [memory, prior_rd1, imm, rd2]
                 elif(operation == "pre"):
+                    memory = dut_fetch.memory_mask(DUT, rd1, imm, self.funct3)
                     print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2} ")
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [rd1, rd2] #no imm value to obtain before clk 
-    def checker(self, expected, actual, dut): #NOTE: doesn't feature overflow handling due to "await"/async property
+    def checker(self, expected, actual, dut, prior_rd1=0): #NOTE: doesn't feature overflow handling due to "await"/async property
         match op[self.opcode]:
             case "R-Type": print(f"Expected rd: {expected}")
             case "I-Type": print(f"Expected rd: {expected}")
@@ -484,18 +454,19 @@ class instruction():
         if(expected) != (actual[0]):
             print(f"Instruction Failed")
             dut_fetch.control(dut)
-            rs1 = dut_fetch.reg(dut, self.rs1)
+            rd1 = dut_fetch.reg(dut, self.rs1)
             imm = dut_fetch.imm(dut)
             final = dut_fetch.reg(dut, self.rd)
-            uint_rs1 = dut_fetch.unsigned_reg(dut, self.rs1)
+            uint_rd1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
-            
-            print(f"final={final}, rd1={rs1}, imm={imm}")
-            print(f"unsigned: final={uint_final}, rd1={uint_rs1}, imm={uint_imm}")
+            if(self.rs1 == self.rs2): 
+                print(f"Edge case: rs1 = rs2")
+            print(f"final={final}, rd1={rd1}, imm={imm}")
+            print(f"unsigned: final={uint_final}, rd1={uint_rd1}, imm={uint_imm}")
             
             if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
-                memory = dut_fetch.memory(dut, self.rs1, self.imm)
+                memory = dut_fetch.memory(dut, prior_rd1, imm)
                 print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
                 print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
@@ -505,19 +476,19 @@ class instruction():
         else:
             print(f"Success! \n")
             
-            if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"): #debug
-                memory = dut_fetch.memory(dut, self.rs1, self.imm)
-                imm = dut_fetch.imm(dut)
-                rs1 = dut_fetch.reg(dut, self.rs1)
-                address = dut.DUT_Data.addr.value.integer
-                print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
-                print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
-                print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
-                if((imm + rs1) != address):
-                    print(f"Address doens't match: {(imm + rs1)} != {address}")
-                # print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
-                print(f"half_read={dut.DUT_Data.half_read.value}")
-                print("\n")
+            # if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"): #debug
+            #     rd1 = dut_fetch.reg(dut, self.rs1)
+            #     imm = dut_fetch.imm(dut)
+            #     memory = dut_fetch.memory(dut, rd1, imm)
+            #     address = dut.DUT_Data.addr.value.integer
+            #     print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
+            #     print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
+            #     print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
+            #     if((imm + rd1) != address):
+            #         print(f"Address doens't match: {(imm + rd1)} != {address}")
+            #     # print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
+            #     print(f"half_read={dut.DUT_Data.half_read.value}")
+            #     print("\n")
         return
     
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
@@ -574,16 +545,16 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
             (instr, dut) = test.gen_S(dut)
 
         await set_reg_addi(dut, instr.rs1, instr.funct3)     
+        prior_rd1 = dut_fetch.reg(dut, instr.rs1)
 
         instruction.decode(instr, i)
         
         instr.feed(dut)
         
         prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd register values of DUT
-
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")        
         
         expected = instr.model(prior) #expected rd value
-        actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
-        instr.checker(expected, actual, dut)   
+        actual = instr.monitor(dut, "post", prior_rd1) #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+        instr.checker(expected, actual, dut, prior_rd1)   
