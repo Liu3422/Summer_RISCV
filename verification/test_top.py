@@ -78,6 +78,25 @@ async def random_reset_dut(dut, N_bits):
     await randomize_data(dut, N_bits)
     await randomize_rf(dut, N_bits)
     return
+
+async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
+    instr = instruction()
+    instr.gen_I()
+    
+    match Mfunct3[funct3][0]:
+        case "lb": value = random.choice(range(0,992)) #NOTE: S-Type has the same randomization for funct 0,1,2
+        case "lh": value = random.choice(range(0,992,2)) #992 = 1024 (memory index max) - 32(imm max)
+        case "lw": value = random.choice(range(0,992,4))
+        case "lbu": value = random.choice(range(0,992))
+        case "lhu": value = random.choice(range(0,992,2))
+    instr.funct3 = Bits(int="0", length=3) #addi
+    instr.imm = Bits(int=value, length=12)
+    instr.rs1 = Bits(int="0", length=5)
+    instr.rd = reg
+    instr.feed(dut)
+    await RisingEdge(dut.clk) 
+    await Timer(10, units="ns")        
+    # print(f"x{reg.uint} set to {value}")
 # class testcase:
 #     def __init__(self, instr_type, count, specific_instrs):
 #         self.instr_type = instr_type
@@ -243,19 +262,14 @@ class instruction():
         match Mfunct3[self.funct3][0]: #natural alignment constraint
             case "lb": 
                 self.imm = Bits(uint=random.choice(range(32)), length=12)
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "lh": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
             case "lw": 
                 self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
             case "lbu": 
                 self.imm = Bits(uint=random.choice(range(32)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "lhu": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
         return (self, DUT)
     
     def gen_S(self, DUT):
@@ -265,13 +279,10 @@ class instruction():
         match Mfunct3[self.funct3][1]: #natural alignment constraint
             case "sb": 
                 self.imm = Bits(uint=random.choice(range(32)), length=12)
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32)))
             case "sh": 
                 self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,2)))
             case "sw": 
                 self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
-                DUT = dut_fetch.set_reg(DUT, self.rs1, random.choice(range(0,32,4)))
         return (self, DUT)
     
     def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
@@ -496,10 +507,15 @@ class instruction():
             
             if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"): #debug
                 memory = dut_fetch.memory(dut, self.rs1, self.imm)
+                imm = dut_fetch.imm(dut)
+                rs1 = dut_fetch.reg(dut, self.rs1)
+                address = dut.DUT_Data.addr.value.integer
                 print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
                 print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
-                print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
+                if((imm + rs1) != address):
+                    print(f"Address doens't match: {(imm + rs1)} != {address}")
+                # print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
                 print(f"half_read={dut.DUT_Data.half_read.value}")
                 print("\n")
         return
@@ -556,6 +572,8 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
             (instr, dut) = test.gen_I_load(dut)
         else:
             (instr, dut) = test.gen_S(dut)
+
+        await set_reg_addi(dut, instr.rs1, instr.funct3)     
 
         instruction.decode(instr, i)
         
