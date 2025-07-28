@@ -53,7 +53,6 @@ module memory_reg_file#(
                 2'd2: data_memory[word_addr][23:16] <= write_data[7:0]; 
                 2'd3: data_memory[word_addr][31:24] <= write_data[7:0]; 
                 endcase
-            end
                 if(funct3 == 3'd1) begin //sh NOTE: byte_offset = 0 or 2 here
                     case(byte_offset)
                     2'd0: data_memory[word_addr][15:8] <= write_data[15:8]; //store into next byte
@@ -68,6 +67,7 @@ module memory_reg_file#(
                     data_memory[word_addr][23:16] <= write_data[23:16]; 
                     data_memory[word_addr][31:24] <= write_data[31:24];  
                 end        
+            end
         end
     end
 

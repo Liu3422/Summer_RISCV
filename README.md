@@ -10,9 +10,11 @@ Requirements:
     Errors:
         -M value is changing during some load instructions
             -It usually changes to 0, and the rd also sometimes ends up as 0
-        -For the model, some sh instructions incorrectly mask
+        -For the model, some instructions incorrectly mask
             -Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
+            - Byte isn't properly masking, sometimes more than 8 bits.
         - 1/8 of failed tests have mismatching memory
+        - writedata is always 0, even for successful tests. Is this a race condition, or trace of a bug?
 
     Edgecases: 
         - rd = rs1 results in the rd1 value (used to increment in data_memory) changing. 
@@ -50,8 +52,6 @@ and to allow auxiliary information to be stored in function pointers.
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 
-    - Claude coded the entirety of the log parser (parser.py). Do I want to code my own in the future?
-        - Honestly not even that useful, just a cool little log-checker. 
     
     Future:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
