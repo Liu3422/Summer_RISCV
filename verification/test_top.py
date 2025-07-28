@@ -201,12 +201,17 @@ class dut_fetch():
     def memory_mask(rd1, imm, funct3, field): #(dut_fetch.reg(rs1), dut_fetch.imm, self.funct3)
         byte_offset = (rd1 + imm) % 4 #mask for last 2 bits
         match Mfunct3[funct3][0]: #monitor only the relevant place in memory
-            case "lb" | "lbu": field &= BYTE_MASK #NOTE: masking is identical for S-Type as well
+            case "lb" | "lbu": 
+                match(byte_offset):
+                    case 0: field &= BYTE_MASK #NOTE: masking is identical for S-Type as well
+                    case 1: field &= (BYTE_MASK << 8)
+                    case 2: field &= (BYTE_MASK << 16)
+                    case 3: field &= (BYTE_MASK << 24)
             case "lh" | "lhu": 
                 if (byte_offset == 0):
                     field &= HALF_MASK
                 elif (byte_offset == 2):
-                    field &= (HALF_HIGH_MASK) >> 16 #Right shift half a word, since we are only reading the half-word
+                    field = (field & HALF_HIGH_MASK) >> 16 #Right shift half a word, since we are only reading the half-word
                 else: #memory address misalignment
                     print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
                     field &= HALF_MASK #out of region of operation
@@ -353,36 +358,40 @@ class instruction():
         match op[self.opcode]: #setting rd2 operand
             case "R-Type": field = prior[2]
             case "I-Type": #NOTE: masking must be done here due to imm's value being determined AFTER clk. 
-                if (Rfunct3[self.funct3][0] == "sltu"):
-                    field = (self.imm[0:12]).uint
-                elif(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits for srl, sll, srai.
-                    field = self.imm.int & SHIFT_MASK
-                else:
-                    field = (self.imm[0:12]).int
+                match Rfunct3[self.funct3][0]:
+                    case "sltu": field = (self.imm[0:12]).uint
+                    case "srl"|"sll": field = self.imm.int & SHIFT_MASK
+                    case _: field = (self.imm[0:12]).int
             case "I-Type Load": field = prior[1]
-            case "S-Type": #masking rd2
-                field = dut_fetch.memory_mask(rd1, self.imm.int, self.funct3, prior[2])
-        # try:
-        if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
-            match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
-                case "add":
-                    if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
-                    else: return rd1 + field 
-                case "sll": return binary_to_signed(lshift(rd1, field) & WORD_MASK) #rd1 << field. Prevents all overflow with mask.
-                case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
-                case "sltu": return 1 if rd1 < field else 0
-                case "xor": return rd1 ^ field
-                case "srl": #NOTE: python's >> is arithmetic
-                    if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
-                    else: return binary_to_signed(rshift(rd1, field)) #logical
-                case "or": return (rd1 | field)
-                case "and": return (rd1 & field)
-                case default: print(f"Model Error")
-        elif(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
+            case "S-Type":
+                match Mfunct3[self.funct3][1]: #expected value is always from rd, lsb first
+                    case "sb": field = prior[2] & BYTE_MASK 
+                    case "sh": 
+                        field = prior[2] & HALF_MASK
+                        if(((rd1+self.imm.int)>>2) == 2):
+                            field = (field >> 16)     
+                    case "sw": field = prior[2]
+        try:
+            if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
+                match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
+                    case "add":
+                        if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
+                        else: return rd1 + field 
+                    case "sll": return binary_to_signed(lshift(rd1, field) & WORD_MASK) #rd1 << field. Prevents all overflow with mask.
+                    case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
+                    case "sltu": return 1 if rd1 < field else 0
+                    case "xor": return rd1 ^ field
+                    case "srl": #NOTE: python's >> is arithmetic
+                        if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
+                        else: return binary_to_signed(rshift(rd1, field)) #logical
+                    case "or": return (rd1 | field)
+                    case "and": return (rd1 & field)
+                    case _: print(f"Model Error")
+            elif(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
                 return field
-        # except Exception as e:
-        #     print(f"Error occured on {Mfunct3[self.funct3][0]}\n {e}")
-        #     return 0
+        except Exception as e:
+            print(f"Error occured on {Mfunct3[self.funct3][0]}\n {e}")
+            return 0
             
     def monitor(self, DUT, operation, rd1=0): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
@@ -390,7 +399,7 @@ class instruction():
         # "pre"  : won't print imm 
         # "post" : will print only the expected value
         # prior_rd1 = prior[2]
-        rd = dut_fetch.reg(DUT, self.rd)
+        rd = dut_fetch.unsigned_reg(DUT, self.rd)
         match op[self.opcode]:
             case "R-Type":
                 (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
@@ -443,7 +452,6 @@ class instruction():
             print(f"Edge case: rs1 = rd")
         elif (memory != dut.DUT_Data.word_data.value): #edge case results in a different memory address within the DUT, thus irrelevant
             print(f"Memory doesn't match, probably address mismatch: memory={bin(memory)}, word_data={dut.DUT_Data.word_data.value}")
-            print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
             # print(f"rd1 + imm: {prior_rd1} + {imm} = {prior_rd1 + imm}")
             # fail += 1 #is this actually a failed test? The instruction performed as it should without any problems
         if(expected) != (actual): #basic check
@@ -474,6 +482,7 @@ class instruction():
                 print(f"write_data:{dut.write_data.value}")                    
                 assert(dut.DUT_Data.MemWr.value == 1)
                 assert(dut.DUT_Data.MemRead.value == 0)
+            print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
             print(f"Instruction Failed")
             print(f"{fail} incorrect test(s)\n")
         return
@@ -532,7 +541,7 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
             (instr, dut) = test.gen_S(dut)
 
         await set_reg_addi(dut, instr.rs1, instr.funct3) #sets the rs1 value
-        prior_rd1 = dut_fetch.reg(dut, instr.rs1) #NOTE: rd1's value shouldn't change before or during the clk.
+        prior_rd1 = dut_fetch.reg(dut, instr.rs1) #NOTE: rd1's value shouldn't change before or during the clk for memory access purposes. rd1 WILL change if rs1 = rd, but accessing the original rd1 will ensure correct operation.
         prior_memory = dut_fetch.memory(dut, prior_rd1, instr.imm.int)
         instruction.decode(instr, i)
         

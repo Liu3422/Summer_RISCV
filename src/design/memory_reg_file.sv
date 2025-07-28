@@ -25,7 +25,7 @@ module memory_reg_file#(
     ) (
     input logic clk, n_rst, MemWr, MemRead,
     input logic [11:0] addr, //byte-address
-    input logic [31:0] write_data,
+    input logic [31:0] write_data, //rd2. 
     input logic [2:0] funct3,
     output logic [31:0] data_read
     );
@@ -46,25 +46,25 @@ module memory_reg_file#(
             end
         end
         else if (MemWr) begin
-            case(byte_offset)
-            2'd0: data_memory[word_addr][7:0] <= write_data[7:0]; //sb
-            2'd1: data_memory[word_addr][15:8] <= write_data[7:0]; 
-            2'd2: data_memory[word_addr][23:16] <= write_data[7:0]; 
-            2'd3: data_memory[word_addr][31:24] <= write_data[7:0]; 
-            endcase
-            if(funct3 == 3'd1) begin //sh NOTE: byte_offset = 0 or 2 here
+            if(funct3 == 3'd0) begin
+                case(byte_offset) //First byte is always written
+                2'd0: data_memory[word_addr][7:0] <= write_data[7:0]; //sb
+                2'd1: data_memory[word_addr][15:8] <= write_data[7:0]; 
+                2'd2: data_memory[word_addr][23:16] <= write_data[7:0]; 
+                2'd3: data_memory[word_addr][31:24] <= write_data[7:0]; 
+                endcase
+            end
+            else if(funct3 == 3'd1) begin //sh NOTE: byte_offset = 0 or 2 here
                 case(byte_offset)
-                2'd0: data_memory[word_addr][15:8] <= write_data[15:8]; //store into next byte
+                2'd0: data_memory[word_addr][15:0] <= write_data[15:0]; //store into next byte
                 // 2'd1: data_memory[word_addr][15:8] <= write_data[15:8]; //misaligned address
-                2'd2: data_memory[word_addr][15:8] <= write_data[15:8]; 
+                2'd2: data_memory[word_addr][31:16] <= write_data[15:0]; 
                 // 2'd3: data_memory[word_addr][15:8] <= write_data[15:8]; //misaligned address
-                default: data_memory[word_addr][15:8] <= 'b0;
+                default: data_memory[word_addr][15:0] <= 'b0; //misaligned address
                 endcase
             end
             else if(funct3 == 3'd2 & (byte_offset == 2'b0)) begin //sw NOTE: byte_offset = 0 here
-                data_memory[word_addr][15:8] <= write_data[15:8]; //store next 3 bytes
-                data_memory[word_addr][23:16] <= write_data[23:16]; 
-                data_memory[word_addr][31:24] <= write_data[31:24];  
+                data_memory[word_addr] <= write_data;
             end        
         end
         

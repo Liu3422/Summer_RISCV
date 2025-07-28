@@ -11,13 +11,16 @@ Requirements:
         -M value is changing during some load instructions
             -It usually changes to 0, and the rd also sometimes ends up as 0
         -For the model, some instructions incorrectly mask
-            -Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
+            - Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
             - Byte isn't properly masking, sometimes more than 8 bits.
             - half can differ between lower and upper half of word. If model is different from DUT, it prints incorrect.
         - 1/8 of failed tests have mismatching memory
         - writedata (rd2) is always 0, even for successful tests. Is this a race condition, or trace of a bug?
-        - Every single rd = rs1 case is failing. They all have memory mismatch from rd1 + imm.
-            - This is because rs1's value changes within the DUT, thus causing the memory file to look at a different value.
+        - lh not checking for sign extension
+            -Non-U type load/store are signed, treat them that way.
+        - sb fails have 0 in memory. They also tend to not actually change memory at all
+            - This is due to improper masking of the word in memory... sb passes when byte_offset is 0 (default mask)
+            - Initial fix has been written in, more work may be needed
         - For a few correct lw tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
             - This is super weird...
             Test 126
@@ -45,7 +48,7 @@ and to allow auxiliary information to be stored in function pointers.
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
     In-Progress:
-    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions.  30% Pass rate
+    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions. 80% Pass rate
     Current: Using addi instead of directly writing to DUT.
     - constrain addressing to rd1 + imm <1024.
     - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
@@ -119,12 +122,10 @@ and to allow auxiliary information to be stored in function pointers.
     - NONE!!!
     - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
         -Data memory = 1024 words. Instruction memory = 64 words/instructions
-        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[10:0]?
+        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[11:0]?
             - Or assign data memory to 32-bit address? Kind of overkill, since that's 2^28 bytes. 
-        - variable amount of data to store/assign in memory. 
-        - Combinational read from memory? 
     Current iteration:
-        -11 bit addr 
+        -12 bit addr 
         -combinational read, clk'd write
-        -always write first byte, then write half word or full word based on funct3.
+        -Only accepts natural alignment memory.
     - Currently little endian (LSB in lower address first) in cocotb and memory_reg_file
