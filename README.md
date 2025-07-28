@@ -12,10 +12,12 @@ Requirements:
             -It usually changes to 0, and the rd also sometimes ends up as 0
         -For the model, some sh instructions incorrectly mask
             -Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
+        - 1/8 of failed tests have mismatching memory
 
     Edgecases: 
         - rd = rs1 results in the rd1 value (used to increment in data_memory) changing. 
-            - The whole testbench is being modified to combat this, resulting in some normal tests not passing.
+            - rs1's value is extracted at the start of the test, right after the addi instr.
+            - fails also results in mismatching memory
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
@@ -35,6 +37,9 @@ and to allow auxiliary information to be stored in function pointers.
             lw: 0 -> word (self-explanatory)
             - This allow applies to store
     - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
+        - Do I want this in monitor or model?
+        - monitor will mean not seeing the whole word in memory. Do I need to?
+
     - convert more of the program into OOP classes/objects, its getting pretty long. 
     
     Current:
@@ -49,7 +54,7 @@ and to allow auxiliary information to be stored in function pointers.
         - Honestly not even that useful, just a cool little log-checker. 
     
     Future:
-    - Create more classes: Testcase, (idk yet) 
+    - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
     - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
     - Constrained random coverage with jumping instructions?
@@ -62,6 +67,8 @@ and to allow auxiliary information to be stored in function pointers.
         - Only start doing after all other instructions are done.
     - Use cocotb's built-in "logging" library instead of manually printing.
         - Moving from hardcoded debug prints to OOP logging. 
+    - Split "instruction" class with "test" class (decode, monitor, model, etc.)
+        - test class will be a child and inherit the instruction class. OOP opportunity!
 
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
@@ -102,4 +109,4 @@ and to allow auxiliary information to be stored in function pointers.
         -11 bit addr 
         -combinational read, clk'd write
         -always write first byte, then write half word or full word based on funct3.
-    - Little or big endian?
+    - Currently little endian (LSB in lower address first) in cocotb, though hardware doesn't really see endian. 

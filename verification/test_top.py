@@ -224,6 +224,22 @@ class dut_fetch():
                     print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
                     memory &= HALF_MASK #out of region of operation
         return memory
+    def register_mask(DUT, instr):
+        rd1 = dut_fetch.reg(DUT, instr.rs1)
+        rd2 = dut_fetch.reg(DUT, instr.rs2)
+        imm = dut_fetch.imm(DUT)
+        match Rfunct3[instr.funct3][0]: #This should only apply to R + I type.
+            case "sltu":
+                rd1 = dut_fetch.unsigned_reg(DUT, instr.rs1)
+                rd2 = dut_fetch.unsigned_reg(DUT, instr.rs2)
+                imm = dut_fetch.unsigned_imm(DUT)
+            case "srl": 
+                imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
+                rd2 &= SHIFT_MASK
+            case "sll": 
+                imm &= SHIFT_MASK 
+                rd2 &= SHIFT_MASK
+        return (rd1, rd2, imm)
         
 class instruction():
     def __init__(self):
@@ -343,27 +359,22 @@ class instruction():
         print(f"Instruction: {(self.bin())}")
                 
     def model(self, prior): #returns the expected rd value
-        #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2, imm, or none
-        #load: prior = [rd, M, rs1, imm]
-        #store: prior =  [M, rs1, imm, rs2] ("pre" has [rs1, rs2])
+        #prior always has prior[0] = rd, prior[1] = rs1, and prior[2] can be rs2 or none
+        #load: prior = [rd, M, rs1]
+        #store: prior =  [M, rs1, rs2] ("pre" has [rs1, rs2])
         rd1 = (prior[1]) #only used for R-type
         # DUT values shouldn't be extracted here, only expected test values.
         match op[self.opcode]: #setting rd2 operand
-            case "R-Type":
-                if(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits.
-                    field = (prior[2]) & SHIFT_MASK
-                else:
-                    field = prior[2]
-            case "I-Type": 
+            case "R-Type": field = prior[2]
+            case "I-Type": #NOTE: masking must be done here due to imm's value being determined AFTER clk. 
                 if (Rfunct3[self.funct3][0] == "sltu"):
                     field = (self.imm[0:12]).uint
                 elif(((Rfunct3[self.funct3][0] == "srl") or (Rfunct3[self.funct3][0] == "sll")) ): # only shift lower 5 bits for srl, sll, srai.
                     field = self.imm.int & SHIFT_MASK
                 else:
                     field = (self.imm[0:12]).int
-            #masking is now done in monitor
             case "I-Type Load": field = prior[1]
-            case "S-Type": field = prior[1]
+            case "S-Type": field = prior[2]
                 
         try:
             if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
@@ -384,66 +395,52 @@ class instruction():
             elif(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
                 return field
         except Exception as e:
-            print(f"Error occured on {Rfunct3[self.funct3][0]}. Probably negative shift error \n {e}")
+            print(f"Error occured on {Rfunct3[self.funct3][0]}\n {e}")
             return 0
             
-    def monitor(self, DUT, operation, prior_rd1=0): #returns 3 arguments read from DUT
+    def monitor(self, DUT, operation, rd1): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         #operation: 
         # "pre"  : won't print imm 
-        # "post" : will print imm
+        # "post" : will print only the expected value
         # prior_rd1 = prior[2]
-        rd1 = dut_fetch.reg(DUT, self.rs1)
-        rd2 = dut_fetch.reg(DUT, self.rs2)
-        unsigned_rd2 = dut_fetch.unsigned_reg(DUT, self.rs2)
-        unsigned_rd1 = dut_fetch.unsigned_reg(DUT, self.rs1)
         rd = dut_fetch.reg(DUT, self.rd)
-        imm = dut_fetch.imm(DUT)
-        unsigned_imm = dut_fetch.unsigned_imm(DUT) & 0xFFF
-        match Rfunct3[self.funct3][0]: #This should only apply to R + I type.
-            case "sltu":
-                rd1 = unsigned_rd1
-                rd2 = unsigned_rd2
-                imm = unsigned_imm
-            case "srl": 
-                imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
-                rd2 &= SHIFT_MASK
-            case "sll": 
-                imm &= SHIFT_MASK 
-                rd2 &= SHIFT_MASK
         match op[self.opcode]:
             case "R-Type":
-                if(operation == "post"): print("Actual: ", end="")
+                (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
+                if(operation == "post"): 
+                    print("Actual: ", end="")
+                    return rd
                 elif(operation == "pre"): print("Pre-instruction: ", end="")
                 print(f"rd={rd}, rd1={rd1}, rd2={rd2}")
                 return [rd, rd1, rd2]
             case "I-Type":
+                (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
                 if(operation == "post"): #irrelevant prior imm field ignored
                     print(f"Actual: rd={rd}, rd1={rd1}, imm={imm}")
-                    return [rd, rd1, imm]
+                    return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, rd1={rd1}")
                     return [rd, rd1]
             case "I-Type Load": 
+                memory = dut_fetch.memory_mask(DUT, rd1, self.imm.int, self.funct3)
                 if(operation == "post"):
-                    memory = dut_fetch.memory_mask(DUT, prior_rd1, imm, self.funct3)
-                    print(f"Actual: rd={rd}, M[{rd1}(rd1)+{imm}(imm)]={memory}")
-                    return [rd, memory, prior_rd1, imm]
+                    print(f"Actual: rd={rd}, M[{rd1}(rd1)+{dut_fetch.imm(DUT)}(imm)]={memory}")
+                    return rd
                 elif(operation == "pre"):
-                    memory = dut_fetch.memory_mask(DUT, rd1, imm, self.funct3)
                     print(f"Pre-instruction: rd={rd}, M[{rd1}(rd1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [rd, memory, rd1]
             case "S-Type": #manually clk for memory to be written?
+                rd2 = dut_fetch.reg(DUT, self.rs2)
+                memory = dut_fetch.memory_mask(DUT, rd1, self.imm.int, self.funct3)
                 if(operation == "post"):
-                    memory = dut_fetch.memory_mask(DUT, prior_rd1, imm, self.funct3)
-                    print(f"Actual: M={memory}, rd1={rd1}, imm={imm}, rd2={rd2}")
-                    return [memory, prior_rd1, imm, rd2]
+                    print(f"Actual: M={memory}, rd1={rd1}, imm={dut_fetch.imm(DUT)}, rd2={rd2}")
+                    return memory
                 elif(operation == "pre"):
-                    memory = dut_fetch.memory_mask(DUT, rd1, imm, self.funct3)
                     print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2} ")
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
-                    return [rd1, rd2] #no imm value to obtain before clk 
+                    return [memory, rd1, rd2] #no imm value to obtain before clk 
     def checker(self, expected, actual, dut, prior_rd1=0): #NOTE: doesn't feature overflow handling due to "await"/async property
         match op[self.opcode]:
             case "R-Type": print(f"Expected rd: {expected}")
@@ -451,7 +448,7 @@ class instruction():
             case "I-Type Load": print(f"Expected rd: {expected}")
             case "S-Type": print(f"Expected Memory: {expected}")
             
-        if(expected) != (actual[0]):
+        if(expected) != (actual):
             print(f"Instruction Failed")
             dut_fetch.control(dut)
             rd1 = dut_fetch.reg(dut, self.rs1)
@@ -460,16 +457,17 @@ class instruction():
             uint_rd1 = dut_fetch.unsigned_reg(dut, self.rs1)
             uint_imm = dut_fetch.unsigned_imm(dut)
             uint_final = dut_fetch.unsigned_reg(dut, self.rd)
-            if(self.rs1 == self.rs2): 
-                print(f"Edge case: rs1 = rs2")
+            if(self.rs1 == self.rd and op[self.opcode] == "I-Type Load"): 
+                print(f"Edge case: rs1 = rd")
             print(f"final={final}, rd1={rd1}, imm={imm}")
             print(f"unsigned: final={uint_final}, rd1={uint_rd1}, imm={uint_imm}")
             
             if(op[self.opcode] == "I-Type Load" or op[self.opcode] == "S-Type"):
                 memory = dut_fetch.memory(dut, prior_rd1, imm)
-                print(f"memory={bin(memory)}, word_data={dut.DUT_Data.word_data}")
+                if (memory != dut.DUT_Data.word_data.value):
+                    print(f"Memory doesn't match: memory={bin(memory)}, word_data={dut.DUT_Data.word_data.value}")
                 print(f"data_read: {dut.data_read}, write_data:{dut.write_data}")
-                print(f"Binary: expected={bin(expected)}, actual={bin(actual[0])}")
+                print(f"Binary: expected={bin(expected)}, actual={bin(actual)}")
                 print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
                 print(f"half_read={dut.DUT_Data.half_read.value}")
             print("\n")
@@ -544,17 +542,17 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         else:
             (instr, dut) = test.gen_S(dut)
 
-        await set_reg_addi(dut, instr.rs1, instr.funct3)     
-        prior_rd1 = dut_fetch.reg(dut, instr.rs1)
+        await set_reg_addi(dut, instr.rs1, instr.funct3) #sets the rs1 value
+        rd1 = dut_fetch.reg(dut, instr.rs1) #NOTE: rd1's value shouldn't change before or during the clk.
 
         instruction.decode(instr, i)
         
         instr.feed(dut)
         
-        prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd register values of DUT
+        prior = instr.monitor(dut, "pre", rd1) #prior rs1, rs2, rd register values of DUT
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")        
         
         expected = instr.model(prior) #expected rd value
-        actual = instr.monitor(dut, "post", prior_rd1) #post-instruction rs1, rs2, rd, and/or imm values of DUT  
-        instr.checker(expected, actual, dut, prior_rd1)   
+        actual = instr.monitor(dut, "post", rd1) #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+        instr.checker(expected, actual, dut, rd1)   
