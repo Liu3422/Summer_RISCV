@@ -29,9 +29,8 @@ Summer_RV32I/
 RV32I_FPGA/
 sim_build/
 __pycache__/
-#why can't i ignore this on my git?
-riscv-gnu-toolchain\ 
-riscv-gnu-toolchain/
+verification/parser.py
+CLAUDE CODE Cocotb Log Parser Documentation.pdf
 
 # OS/editor stuff
 .DS_Store
