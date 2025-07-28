@@ -13,8 +13,26 @@ Requirements:
         -For the model, some instructions incorrectly mask
             -Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
             - Byte isn't properly masking, sometimes more than 8 bits.
+            - half can differ between lower and upper half of word. If model is different from DUT, it prints incorrect.
         - 1/8 of failed tests have mismatching memory
-        - writedata is always 0, even for successful tests. Is this a race condition, or trace of a bug?
+        - writedata (rd2) is always 0, even for successful tests. Is this a race condition, or trace of a bug?
+        - Every single rd = rs1 case is failing. They all have memory mismatch from rd1 + imm.
+            - This is because rs1's value changes within the DUT, thus causing the memory file to look at a different value.
+        - For a few correct lw tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
+            - This is super weird...
+            Test 126
+            Instruction type: I-Type Load
+            Name: lw
+            Registers: rd=21, rs1=2, Imm=8
+            Instruction: 00000000100000010010101010000011
+            Pre-instruction: rd=710, M[104(rd1)+0x008(imm)]=-894368293
+            Word-Address:28, Byte-Address:112
+            Actual: rd=-894368293, M[104(rd1)+8(imm)]=-894368293
+            Expected rd: -894368293
+            Memory doesn't match, probably address mismatch: memory=-0b110101010011101111101000100101, word_data=11001010101100010000010111011011
+            addr=112,word_addr=28, byte_offset=0
+            Instruction Failed
+            1 incorrect test(s)
 
     Edgecases: 
         - rd = rs1 results in the rd1 value (used to increment in data_memory) changing. 
@@ -109,4 +127,4 @@ and to allow auxiliary information to be stored in function pointers.
         -11 bit addr 
         -combinational read, clk'd write
         -always write first byte, then write half word or full word based on funct3.
-    - Currently little endian (LSB in lower address first) in cocotb, though hardware doesn't really see endian. 
+    - Currently little endian (LSB in lower address first) in cocotb and memory_reg_file
