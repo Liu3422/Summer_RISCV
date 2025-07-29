@@ -8,48 +8,27 @@ Requirements:
 **Cocotb**
 
     Errors:
-        -M value is changing during some load instructions
-            -It usually changes to 0, and the rd also sometimes ends up as 0
-        -For the model, some instructions incorrectly mask
-            - Still need to figure out the specifics of using the past rd1, it is messing up some normal tests!
-            - Byte isn't properly masking, sometimes more than 8 bits.
-            - half can differ between lower and upper half of word. If model is different from DUT, it prints incorrect.
-        - 1/8 of failed tests have mismatching memory
-        - writedata (rd2) is always 0, even for successful tests. Is this a race condition, or trace of a bug?
-        - lh not checking for sign extension
-            -Non-U type load/store are signed, treat them that way.
-        - sb fails have 0 in memory. They also tend to not actually change memory at all
-            - This is due to improper masking of the word in memory... sb passes when byte_offset is 0 (default mask)
-            - Initial fix has been written in, more work may be needed
-        - For a few correct lw tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
-            - This is super weird...
-            Test 126
+        - For a lot of successful tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
+            - This is super weird... especially since the tests themselves pass.
+            Test 454
             Instruction type: I-Type Load
-            Name: lw
-            Registers: rd=21, rs1=2, Imm=8
-            Instruction: 00000000100000010010101010000011
-            Pre-instruction: rd=710, M[104(rd1)+0x008(imm)]=-894368293
-            Word-Address:28, Byte-Address:112
-            Actual: rd=-894368293, M[104(rd1)+8(imm)]=-894368293
-            Expected rd: -894368293
-            Memory doesn't match, probably address mismatch: memory=-0b110101010011101111101000100101, word_data=11001010101100010000010111011011
-            addr=112,word_addr=28, byte_offset=0
-            Instruction Failed
-            1 incorrect test(s)
-
-    Edgecases: 
-        - rd = rs1 results in the rd1 value (used to increment in data_memory) changing. 
-            - rs1's value is extracted at the start of the test, right after the addi instr.
-            - fails also results in mismatching memory
+            Name: lb
+            Registers: rd=6, rs1=8, Imm=4
+            Instruction: 00000000010001000000001100000011
+            Pre-instruction: rd=0, M[20(rd1)+0x004(imm)]=-128
+            Word-Address:6, Byte-Address:24
+            Actual: rd=-128, M[20(rd1)+4(imm)]=-128
+            Expected rd: -128
+            Memory doesn't match, probably address mismatch: memory=-0b101010001110101111001110000000, word_data=11010101110001010000110010000000
+            Success! 
+        - <5 cases where model outputs 0 for expected memory when it isn't.
 
         RISCV Instruction Set Manual: 
         The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
 and to allow auxiliary information to be stored in function pointers.
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
-    In-Progress:
-    - S-type (Memory) instruction coverage. Also the I-type load + lui instructions. 80% Pass rate
-    Current: Using addi instead of directly writing to DUT.
+    Info:
     - constrain addressing to rd1 + imm <1024.
     - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
         - This constraint must be added into cocotb. If misaligned, will inform of the test and only store first byte.
@@ -66,10 +45,15 @@ and to allow auxiliary information to be stored in function pointers.
     - convert more of the program into OOP classes/objects, its getting pretty long. 
     
     Current:
-    - 0% error with N=10,000 in < 5 seconds (100k < 60 sec)
-    - ~3 overflow cases (.03%), 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
-    - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
-    - basic overflow error + instruction error (negative shift) handling
+    R-Type (and I-Type counterpart)
+        - 0% error with N=10,000 in < 5 seconds (100k < 60sec)
+        - ~3 overflow cases (.03%), 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
+        - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
+        - basic overflow error + instruction error (negative shift) handling
+    Memory (I-Type Load and S-Type)
+        - ~0% error with N=10,000 in <10 seconds (100k ~ 60sec)
+        - Uses an addi instruction to write/set rs1 value prior to test.
+        - All instructions follow natural alignment.
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 

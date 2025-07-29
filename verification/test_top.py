@@ -36,9 +36,9 @@ async def generate_clock(dut):
         dut.clk.value = 1
         await Timer(10, units="ns")
 
-def binary_to_signed(val):
-    if(val >= 2**31):
-        val -= 2**32 #converts to signed
+def binary_to_signed(val, n_bits):
+    if(val >= 2**(n_bits-1)):
+        val -= 2**n_bits #converts to signed
     return val
 
 def signed_to_binary(val):
@@ -204,9 +204,16 @@ class dut_fetch():
             case "lb" | "lbu": 
                 match(byte_offset):
                     case 0: field &= BYTE_MASK #NOTE: masking is identical for S-Type as well
-                    case 1: field &= (BYTE_MASK << 8)
-                    case 2: field &= (BYTE_MASK << 16)
-                    case 3: field &= (BYTE_MASK << 24)
+                    case 1: 
+                        field &= (BYTE_MASK << 8) 
+                        field = field >> 8
+                    case 2: 
+                        field &= (BYTE_MASK << 16) 
+                        field = field >> 16
+                    case 3: 
+                        field &= (BYTE_MASK << 24) 
+                        field = field >> 24
+                if(Mfunct3[funct3][0] == "lb"): field = binary_to_signed(field, 8)
             case "lh" | "lhu": 
                 if (byte_offset == 0):
                     field &= HALF_MASK
@@ -215,7 +222,8 @@ class dut_fetch():
                 else: #memory address misalignment
                     print(f"Memory address is misaligned,{byte_offset} != 0 or 2")
                     field &= HALF_MASK #out of region of operation
-            case "lw" : pass 
+                if(Mfunct3[funct3][0] == "lh"): field = binary_to_signed(field, 16)
+            case "lw" : pass
         return field
     def register_mask(DUT, instr):
         (rd1, rd2, imm) = (dut_fetch.reg(DUT, instr.rs1), dut_fetch.reg(DUT, instr.rs2), dut_fetch.imm(DUT))
@@ -365,11 +373,14 @@ class instruction():
             case "I-Type Load": field = prior[1]
             case "S-Type":
                 match Mfunct3[self.funct3][1]: #expected value is always from rd, lsb first
-                    case "sb": field = prior[2] & BYTE_MASK 
+                    case "sb": 
+                        field = prior[2] & BYTE_MASK 
+                        if(Mfunct3[self.funct3][1] == "sb"): field = binary_to_signed(field, 8)
                     case "sh": 
                         field = prior[2] & HALF_MASK
                         if(((rd1+self.imm.int)>>2) == 2):
                             field = (field >> 16)     
+                        if(Mfunct3[self.funct3][1] == "sh"): field = binary_to_signed(field, 16)
                     case "sw": field = prior[2]
         try:
             if(op[self.opcode] == "R-Type" or op[self.opcode] == "I-Type"):
@@ -377,13 +388,13 @@ class instruction():
                     case "add":
                         if((self.funct7.uint == 32) and (op[self.opcode] == "R-Type")): return rd1 - field #sub
                         else: return rd1 + field 
-                    case "sll": return binary_to_signed(lshift(rd1, field) & WORD_MASK) #rd1 << field. Prevents all overflow with mask.
-                    case "slt": return 1 if (binary_to_signed(rd1) < binary_to_signed(field)) else 0
+                    case "sll": return binary_to_signed(lshift(rd1, field) & WORD_MASK, 32) #rd1 << field. Prevents all overflow with mask.
+                    case "slt": return 1 if (binary_to_signed(rd1,32) < binary_to_signed(field, 32)) else 0
                     case "sltu": return 1 if rd1 < field else 0
                     case "xor": return rd1 ^ field
                     case "srl": #NOTE: python's >> is arithmetic
                         if(self.funct7.uint == 32):  return rd1 >> (field) #arithmetic
-                        else: return binary_to_signed(rshift(rd1, field)) #logical
+                        else: return binary_to_signed(rshift(rd1, field), 32) #logical
                     case "or": return (rd1 | field)
                     case "and": return (rd1 & field)
                     case _: print(f"Model Error")
@@ -399,7 +410,7 @@ class instruction():
         # "pre"  : won't print imm 
         # "post" : will print only the expected value
         # prior_rd1 = prior[2]
-        rd = dut_fetch.unsigned_reg(DUT, self.rd)
+        rd = dut_fetch.reg(DUT, self.rd)
         match op[self.opcode]:
             case "R-Type":
                 (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
@@ -490,7 +501,7 @@ class instruction():
     def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if fetch_reg)
         dut.instr_cocotb.value = int(self.bin(), 2)        
 
-# @cocotb.test()
+@cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
