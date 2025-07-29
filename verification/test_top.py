@@ -38,7 +38,7 @@ def signed_to_binary(val):
 def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
 
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift. This is not preserving sign. 
-
+# Make this into a class? These functions sets/resets the dut.
 async def reset_dut(dut):
     print("Resetting DUT \n")
     dut.n_rst.value = 0
@@ -69,7 +69,6 @@ async def random_reset_dut(dut, N_bits):
     await randomize_data(dut, N_bits)
     await randomize_rf(dut, N_bits)
     return
-
 async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
     instr = instruction()
     instr.gen_I()
@@ -82,22 +81,12 @@ async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
     instr.imm = Bits(int=value, length=12)
     instr.rs1 = Bits(int="0", length=5)
     instr.rd = reg
-    instr.feed(dut)
+    tb = testcase(instr, dut)
+    tb.feed()
     await RisingEdge(dut.clk) 
     await Timer(10, units="ns")        
-    # print(f"x{reg.uint} set to {value}")
-# class testcase:
-#     def __init__(self, instr_type, count, specific_instrs):
-#         self.instr_type = instr_type
-#         self.count = count # Number of instructions for stimulus
-#         self.specific_instrs = specific_instrs # explicitly state what instructions to include
-        
-#     def __str__(self):
-#         print(f"type = {self.instr_type}, instructions = {self.specific_instrs}")
-    
-    # def feed_case(self): #feeds the testcase directly to instr. Must be done on every clock cycle
-        
-    # def store_case(self): #stores the testcase to instruction memory. 
+    dut = tb.dut
+
 op = {
     Bits(bin="0110011", length=7) : "R-Type",
     Bits(bin="0010011", length=7) : "I-Type",
@@ -197,7 +186,8 @@ class dut_fetch():
                 if(Mfunct3[funct3][0] == "lh"): field = binary_to_signed(field, 16)
             case "lw" : pass
         return field
-    def register_mask(DUT, instr): #returns fetched (rd1, rd2, imm)
+    def register_mask(instr): #returns fetched (rd1, rd2, imm)
+        DUT = instr.dut
         (rd1, rd2, imm) = (dut_fetch.reg(DUT, instr.rs1), dut_fetch.reg(DUT, instr.rs2), dut_fetch.imm(DUT))
         match Rfunct3[instr.funct3][0]: #This should only apply to R + I type.
             case "sltu":
@@ -208,7 +198,8 @@ class dut_fetch():
                 imm &= SHIFT_MASK #only [0:4] bits count towards shift in RV spec
                 rd2 &= SHIFT_MASK
         return (rd1, rd2, imm)
-    def check_R_I(DUT,self, expected, actual): #returns fail value
+    def check_R_I(self, expected, actual): #returns fail value
+        DUT = self.dut
         if(expected) != (actual):
             print(f"Instruction Failed")
             print(f"final={dut_fetch.reg(DUT, self.rd)}, rd1={dut_fetch.reg(DUT, self.rs1)}, imm={dut_fetch.imm(DUT)}")
@@ -216,8 +207,9 @@ class dut_fetch():
             return 1
         else:
             return 0
-    def check_memory_instr(dut, self, expected, actual, prior_memory, prior_rd1): #returns fail value
+    def check_memory_instr(self, expected, actual): #returns fail value
         fail = 0
+        (dut, prior_rd1, prior_memory) = (self.dut, self.prior_rd1, self.prior_memory)
         memory = dut_fetch.memory(dut, prior_rd1, self.imm.int)
         if(self.rs1 == self.rd and op[self.opcode] == "I-Type Load"): 
             print(f"Edge case: rs1 = rd")
@@ -244,7 +236,7 @@ class dut_fetch():
             print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
         return fail
 
-class instruction():
+class instruction(): #generates the instruction to feed into DUT/testbench
     def __init__(self):
         self.rs1 = None
         self.rs2 = None
@@ -266,12 +258,12 @@ class instruction():
         self.imm = Bits(int=random.randint(-(2**31), 2**31 - 1), length = 32)
         return self
     
-    def gen_R(self, dut): #generates a random R-type test
+    def gen_R(self, DUT): #generates a random R-type test
         self = self.gen_random()
         if((Rfunct3[self.funct3][0] != "add") and (Rfunct3[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
             self.funct7 = Bits(uint="0", length=7)
         if ((Rfunct3[self.funct3][0] == "sll") or (Rfunct3[self.funct3][0] == "srl")): #avoid illegal instruction: negative shift
-            if(dut_fetch.reg(dut, self.rs2) <= 0): 
+            if(dut_fetch.reg(DUT, self.rs2) <= 0): 
                 print("Illegal negative shift detected: swapping instruction")
                 self.funct7 = Bits(uint="0", length=7) 
                 self.funct3 = Bits(uint=random.choice([0,2,3,4,6,7]), length=3) #switch to everything other than shift 
@@ -326,7 +318,13 @@ class instruction():
             case "I-Type" | "I-Type Load": return (self.gen_I_instr()).bin
             case "S-Type": return (self.gen_S_instr()).bin
     
-    #Consider making "testbench" class: inherits instruction's properties and consists of module components 
+class testcase(instruction): #tests a singular instruction
+    def __init__(self, instr, DUT, prior_rd1=0, prior_memory=0):
+        self.__dict__.update(instr.__dict__)
+        self.dut = DUT
+        self.prior_rd1 = prior_rd1
+        self.prior_memory = prior_memory
+        
     def decode(self, test_num): #prints instr-type, name, register nums, imm value, and instruction binary
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
@@ -355,8 +353,7 @@ class instruction():
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={word_imm.int}")
         if(len(self.bin()) != 32):
             print(f"Invalid instruction length: {len(self.bin())} != 32")
-        print(f"Instruction: {(self.bin())}")
-    
+        print(f"Instruction: {(self.bin())}") 
     def R_I_model(self, field, rd1):
         match Rfunct3[self.funct3][0]: #All R-type and their I-type counterparts
             case "add":
@@ -383,13 +380,13 @@ class instruction():
         match op[self.opcode]: #setting field operand (masking, signed vs unsigned, rd2 vs memory vs imm, etc.)
             case "R-Type": 
                 field = prior[2]
-                return instruction.R_I_model(self, field, rd1)
+                return testcase.R_I_model(self, field, rd1)
             case "I-Type": 
                 match Rfunct3[self.funct3][0]:
                     case "sltu": field = (self.imm[0:12]).uint
                     case "srl"|"sll": field = self.imm.int & SHIFT_MASK
                     case _: field = (self.imm[0:12]).int
-                return instruction.R_I_model(self, field, rd1)
+                return testcase.R_I_model(self, field, rd1)
             case "I-Type Load": return prior[1]
             case "S-Type": #rd2 masking
                 match Mfunct3[self.funct3][1]: #expected value is always from rd, lsb first
@@ -402,15 +399,15 @@ class instruction():
                     case "sw": field = prior[2]
                 return field
             
-    def monitor(self, DUT, operation, rd1=0): #returns 3 arguments read from DUT
+    def monitor(self, operation): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         # "pre"  : won't print imm 
         # "post" : will print only the expected value
-
-        rd = dut_fetch.reg(DUT, self.rd)
+        rd1 = self.prior_rd1
+        rd = dut_fetch.reg(self.dut, self.rd)
         match op[self.opcode]: #fetches and prints relevant instruction values
             case "R-Type":
-                (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
+                (rd1, rd2, imm) = dut_fetch.register_mask(self)
                 if(operation == "post"): 
                     print("Actual: ", end="")
                     return rd
@@ -418,7 +415,7 @@ class instruction():
                 print(f"rd={rd}, rd1={rd1}, rd2={rd2}")
                 return [rd, rd1, rd2]
             case "I-Type":
-                (rd1, rd2, imm) = dut_fetch.register_mask(DUT, self)
+                (rd1, rd2, imm) = dut_fetch.register_mask(self)
                 if(operation == "post"): #irrelevant prior imm field ignored
                     print(f"Actual: rd={rd}, rd1={rd1}, imm={imm}")
                     return rd
@@ -426,44 +423,43 @@ class instruction():
                     print(f"Pre-instruction: rd={rd}, rd1={rd1}")
                     return [rd, rd1]
             case "I-Type Load": 
-                memory = dut_fetch.memory_mask(rd1, self.imm.int, self.funct3, dut_fetch.memory(DUT, rd1, self.imm.int))
+                memory = dut_fetch.memory_mask(rd1, self.imm.int, self.funct3, dut_fetch.memory(self.dut, rd1, self.imm.int))
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, M[{rd1}(rd1)+{dut_fetch.imm(DUT)}(imm)]={memory}")
+                    print(f"Actual: rd={rd}, M[{rd1}(rd1)+{dut_fetch.imm(self.dut)}(imm)]={memory}")
                     return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, M[{rd1}(rd1)+{self.imm}(imm)]={memory}") #no immediate displayed here, less information available
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [rd, memory, rd1]
             case "S-Type":
-                rd2 = dut_fetch.reg(DUT, self.rs2)
-                memory = dut_fetch.memory_mask(rd1, self.imm.int, self.funct3, dut_fetch.memory(DUT, rd1, self.imm.int))
+                rd2 = dut_fetch.reg(self.dut, self.rs2)
+                memory = dut_fetch.memory_mask(rd1, self.imm.int, self.funct3, dut_fetch.memory(self.dut, rd1, self.imm.int))
                 if(operation == "post"):
-                    print(f"Actual: M={memory}, rd1={rd1}, imm={dut_fetch.imm(DUT)}, rd2={rd2}")
+                    print(f"Actual: M={memory}, rd1={rd1}, imm={dut_fetch.imm(self.dut)}, rd2={rd2}")
                     return memory
                 elif(operation == "pre"):
                     print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2} ")
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [memory, rd1, rd2] #no imm value to obtain before clk 
-    def checker(self, expected, actual, dut, prior_memory=0, prior_rd1=0): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
-
+    def checker(self, expected, actual): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
         match op[self.opcode]: #basic check of values/registers of each instruction
             case "R-Type" | "I-Type": 
                 print(f"Expected rd: {expected}")
-                fail = dut_fetch.check_R_I(dut, self, expected, actual)  
+                fail = dut_fetch.check_R_I(self, expected, actual)  
             case "I-Type Load": 
                 print(f"Expected rd: {expected}")
-                fail = dut_fetch.check_memory_instr(dut, self, expected, actual, prior_memory, prior_rd1)
+                fail = dut_fetch.check_memory_instr(self, expected, actual)
             case "S-Type": 
                 print(f"Expected Memory: {expected}")
-                fail = dut_fetch.check_memory_instr(dut, self, expected, actual, prior_memory, prior_rd1)
+                fail = dut_fetch.check_memory_instr(self, expected, actual)
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
         else:
             print(f"Success! \n")
         return
     
-    def feed(self, dut): #feeds instruction directly to DUT (beware of race conditions if using fetch_reg)
-        dut.instr_cocotb.value = int(self.bin(), 2)        
+    def feed(self): #feeds instruction directly to DUT (beware of race conditions if using fetch_reg)
+        self.dut.instr_cocotb.value = int(self.bin(), 2)        
 
 @cocotb.test()
 async def R_I_OOP_test(dut):
@@ -478,18 +474,18 @@ async def R_I_OOP_test(dut):
             instr = test.gen_R(dut)
         else:
             instr = test.gen_I()
-            
-        instruction.decode(instr, i)
+        tb = testcase(instr, dut)    
+        tb.decode(i)
         
-        instr.feed(dut)
+        tb.feed()
         
-        prior = instr.monitor(dut, "pre") #prior rs1, rs2, rd register values of DUT
+        prior = tb.monitor("pre") #prior rs1, rs2, rd register values of DUT
 
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")
         
-        expected = instr.model(prior) #expected rd value
-        actual = instr.monitor(dut, "post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
+        expected = tb.model(prior) #expected rd value
+        actual = tb.monitor("post") #post-instruction rs1, rs2, rd, and/or imm values of DUT  
         
         if (expected.bit_length() > 64): #how to make this it's own function while also printing?
             print(f"Severe overflow detected: {expected.bit_length()} bits") #async def + print is weird
@@ -497,7 +493,7 @@ async def R_I_OOP_test(dut):
         elif((expected > MAX_32B_signed) or (expected < MIN_32B_signed)): #Overflow check
             print(f"Overflow detected: {expected} \n") 
         else:
-            instr.checker(expected, actual, dut)
+            tb.checker(expected, actual)
 
 @cocotb.test()
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
@@ -516,16 +512,17 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
             (instr, dut) = test.gen_S(dut)
 
         await set_reg_addi(dut, instr.rs1, instr.funct3) #sets the rs1 value
-        prior_rd1 = dut_fetch.reg(dut, instr.rs1) #NOTE: rd1's value shouldn't change before or during the clk for memory access purposes. rd1 WILL change if rs1 = rd, but accessing the original rd1 will ensure correct operation.
+        prior_rd1 = dut_fetch.reg(dut, instr.rs1) 
         prior_memory = dut_fetch.memory(dut, prior_rd1, instr.imm.int)
-        instruction.decode(instr, i)
+        #NOTE: rd1's value shouldn't change before or during the clk for memory access purposes. rd1 WILL change if rs1 = rd, but accessing the original rd1 will ensure correct operation.
+        tb = testcase(instr, dut, prior_rd1, prior_memory)
+        tb.decode(i)
+        tb.feed()
         
-        instr.feed(dut)
-        
-        prior = instr.monitor(dut, "pre", prior_rd1) #prior rs1, rs2, rd register values of DUT
+        prior = tb.monitor("pre") #prior rs1, rs2, rd register values of DUT
         await RisingEdge(dut.clk) 
         await Timer(10, units="ns")        
         
-        expected = instr.model(prior) 
-        actual = instr.monitor(dut, "post", prior_rd1) 
-        instr.checker(expected, actual, dut, prior_memory, prior_rd1)   
+        expected = tb.model(prior) 
+        actual = tb.monitor("post") 
+        tb.checker(expected, actual)   

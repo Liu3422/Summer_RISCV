@@ -19,7 +19,6 @@ Requirements:
     Info:
     - constrain addressing to rd1 + imm <1024.
     - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
-        - This constraint must be added into cocotb. If misaligned, will inform of the test and only store first byte.
         - Currently no misaligns
         - Follow natural alignment rules: 
             lb: any. 
@@ -27,8 +26,6 @@ Requirements:
             lw: 0 -> word (self-explanatory)
             - This allow applies to store
     - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
-        - Do I want this in monitor or model?
-        - monitor will mean not seeing the whole word in memory. Do I need to?
 
     
     Current:
@@ -42,8 +39,14 @@ Requirements:
         - Uses an addi instruction to write/set rs1 value prior to test.
         - All instructions follow natural alignment.
     - hash maps for converting opcode, funct3, and ALU_Operation to names
-    - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
+    - instruction() class: creates instructions to feed to dut and testbench
+    - testcase(instruction) class: 
+        - tests a single instruction
+        - every testbench component (is model + checker sufficient for scoreboard?)
+        - inherits instruction class properties 
+        - takes in DUT, prior memory and rd1 (for memory access/check)
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes both and resets. 
+
     
     Future:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
@@ -59,11 +62,9 @@ Requirements:
         - Only start doing after all other instructions are done.
     - Use cocotb's built-in "logging" library instead of manually printing.
         - Moving from hardcoded debug prints to OOP logging. 
-    - Split "instruction" class with "test" class (decode, monitor, model, etc.)
-        - test class will be a child and inherit the instruction class. OOP opportunity!
     - Modularized checker more to allow for more advanced checks.
         - Currently only checks instruction's register/memory values.
-        
+
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
