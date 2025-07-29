@@ -18,6 +18,7 @@ HALF_MASK = 0x0000FFFF
 HALF_HIGH_MASK = 0xFFFF0000
 WORD_MASK = 0xFFFFFFFF #Used for sll/i
 NUM_WORDS = 32
+STORE_LIM = 1024 #
 
 async def generate_clock(dut):
     """Generate clock pulses."""
@@ -27,18 +28,16 @@ async def generate_clock(dut):
         await Timer(10, units="ns")
         dut.clk.value = 1
         await Timer(10, units="ns")
-
+#bitwise operations
 def binary_to_signed(val, n_bits):
     if(val >= 2**(n_bits-1)):
         val -= 2**n_bits #converts to signed
     return val
 def signed_to_binary(val):
     return val & ((1 << 32) - 1) #2's complement
-
 def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
-
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift. This is not preserving sign. 
-# Make this into a class? These functions sets/resets the dut.
+# Make this into a class? These functions sets/resets the dut. How to make async def class?
 async def reset_dut(dut):
     print("Resetting DUT \n")
     dut.n_rst.value = 0
@@ -74,9 +73,9 @@ async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
     instr.gen_I()
     
     match Mfunct3[funct3][0]:
-        case "lb" | "lbu": value = random.choice(range(0,992)) #NOTE: S-Type has the same randomization for funct 0,1,2
-        case "lh" | "lhu": value = random.choice(range(0,992,2)) #992 = 1024 (memory index max) - 32(imm max). >>2 results in dividing addr by 4, you can increase this.
-        case "lw": value = random.choice(range(0,992,4))
+        case "lb" | "lbu": value = random.choice(range(0,STORE_LIM)) #NOTE: S-Type has the same randomization for funct 0,1,2
+        case "lh" | "lhu": value = random.choice(range(0,STORE_LIM,2)) 
+        case "lw": value = random.choice(range(0,STORE_LIM,4))
     instr.funct3 = Bits(int="0", length=3) #addi
     instr.imm = Bits(int=value, length=12)
     instr.rs1 = Bits(int="0", length=5)
@@ -94,10 +93,9 @@ op = {
     Bits(bin="0100011", length=7) : "S-Type", 
     Bits(bin="1100011", length=7) : "B-Type",
     Bits(bin="1101111", length=7) : "J-Type",
-    Bits(bin="1100111", length=7) : "I-Type",
-    Bits(bin="0110111", length=7) : "U-Type",
-    Bits(bin="0010111", length=7) : "U-Type",
-    # Bits(bin="1110011", length=7) : "I-Type" #irrelevant for this implementation.
+    Bits(bin="1100111", length=7) : "I-Type Jump",
+    Bits(bin="0110111", length=7) : "U-Type Load",
+    Bits(bin="0010111", length=7) : "U-Type PC"
 }
 
 Rfunct3 = { #first entry is funct7=0, second is funct7=0x20
@@ -121,6 +119,15 @@ Mfunct3 = { #load and store funct3 conversion. NOTE: store only has 0,1,2, for f
     Bits(uint="5", length=3) : ["lhu", "Unsigned-Half"]
 }
 
+Bfunct3 = { #B-Type conversion
+    Bits(uint="0", length=3) : "beq",
+    Bits(uint="1", length=3) : "bne",
+    Bits(uint="4", length=3) : "blt",
+    Bits(uint="5", length=3) : "bge",
+    Bits(uint="6", length=3) : "bltu",
+    Bits(uint="7", length=3) : "bgeu"
+}
+
 ALU_Operation = {
     int("0010", 2) : "ADD",
     int("0110", 2) : "SUB",
@@ -136,7 +143,7 @@ ALU_Operation = {
     int("1101", 2) : "SLTUI"
 }
 
-class dut_fetch():
+class dut_fetch(): #fetches value from DUT
     def __init__(DUT): #maybe have access to all submodules?
         DUT.rf = DUT.DUT_RF
     #Basic fetching without logic/checks
@@ -168,6 +175,8 @@ class dut_fetch():
     def unsigned_memory(DUT, rd1, imm):
         word_addr = (rd1 + imm)>>2
         return DUT.DUT_Data.data_memory[word_addr].value.integer
+    def PC(DUT): #unsigned
+        return DUT.PC.value.integer
     #More advanced fetching
     def memory_mask(rd1, imm, funct3, field): #(dut_fetch.reg(rs1), dut_fetch.imm, self.funct3)
         byte_offset = (rd1 + imm) % 4 #mask for last 2 bits
@@ -210,7 +219,7 @@ class dut_fetch():
     def check_memory_instr(self, expected, actual): #returns fail value
         fail = 0
         (dut, prior_rd1, prior_memory) = (self.dut, self.prior_rd1, self.prior_memory)
-        memory = dut_fetch.memory(dut, prior_rd1, self.imm.int)
+        memory = dut_fetch.memory(dut, prior_rd1, dut_fetch.imm(dut))
         if(self.rs1 == self.rd and op[self.opcode] == "I-Type Load"): 
             print(f"Edge case: rs1 = rd")
         elif (memory != dut.DUT_Data.word_data.value): #edge case results in a different memory address within the DUT, thus irrelevant to check model vs DUT memory values.
@@ -245,7 +254,6 @@ class instruction(): #generates the instruction to feed into DUT/testbench
         self.funct7 = None
         self.opcode = None
         self.imm = None
-        
     def gen_random(self): #generates all possible fields
         self.rs1 = Bits(uint=random.randint(1, 31), length=5) #x1-31 randomly chosen
         self.rs2 = Bits(uint=random.randint(1, 31), length=5) #x1-31 randomly chosen
@@ -257,7 +265,6 @@ class instruction(): #generates the instruction to feed into DUT/testbench
                                             length=7)
         self.imm = Bits(int=random.randint(-(2**31), 2**31 - 1), length = 32)
         return self
-    
     def gen_R(self, DUT): #generates a random R-type test
         self = self.gen_random()
         if((Rfunct3[self.funct3][0] != "add") and (Rfunct3[self.funct3][0] != "srl")): #Switches funct7 for invalid instructions
@@ -269,10 +276,8 @@ class instruction(): #generates the instruction to feed into DUT/testbench
                 self.funct3 = Bits(uint=random.choice([0,2,3,4,6,7]), length=3) #switch to everything other than shift 
         self.opcode = Bits(bin="0110011", length=7)
         return self
-    
     def gen_R_instr(self): #generates the R-type instr
         return Bits().join([self.funct7, self.rs2, self.rs1, self.funct3, self.rd, Bits(bin='0110011', length=7)])
-    
     def gen_I(self): #generates a random I-type test
         self = self.gen_random()
         self.opcode = Bits(bin="0010011", length=7)
@@ -285,10 +290,9 @@ class instruction(): #generates the instruction to feed into DUT/testbench
             else:
                 self.funct7 = Bits(uint="0", length=7)
         return self
-    
     def gen_I_instr(self): #generates the I-type instr
-        return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, self.opcode])
-    
+        return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, self.opcode])        
+        # return Bits().join([self.imm[19:31], self.rs1, self.funct3, self.rd, self.opcode])
     def gen_I_load(self, DUT): #generates a random I-type load test
         self = self.gen_random()
         self.opcode = Bits(bin="0000011", length=7)
@@ -298,25 +302,37 @@ class instruction(): #generates the instruction to feed into DUT/testbench
             case "lh" | "lhu": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
             case "lw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
         return (self, DUT)
-    
     def gen_S(self, DUT):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
         match Mfunct3[self.funct3][1]: #natural alignment constraint
-            case "sb": self.imm = Bits(uint=random.choice(range(32)), length=12)
-            case "sh": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
-            case "sw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
+            case "sb": self.imm = Bits(uint=random.choice(range(STORE_LIM)), length=12)
+            case "sh": self.imm = Bits(uint=random.choice(range(0,STORE_LIM,2)), length=12) 
+            case "sw": self.imm = Bits(uint=random.choice(range(0,STORE_LIM,4)), length=12) 
         return (self, DUT)
-    
-    def gen_S_instr(self): #NOTE: Bits is MSB first and doesn't include end, thus imm[0:7] => imm[11:5] in RTL
-        return Bits().join([self.imm[0:7], self.rs2, self.rs1, self.funct3, self.imm[7:12], Bits(bin="0100011", length=7)])
-    
+    def gen_S_instr(self): 
+        return Bits().join([self.imm[0:7], self.rs2, self.rs1, self.funct3, self.imm[7:12], self.opcode])
+        # return Bits().join([self.imm[20:26], self.rs2, self.rs1, self.funct3, self.imm[27:31], Bits(bin="0100011", length=7)])
+    def gen_B(self):
+        self = self.gen_random()
+        self.funct3 = Bits(uint=random.choice([0,1,4,5,6,7]), length=3)
+        self.opcode = Bits(bin="1100011", length=7)
+        return self
+    def gen_B_instr(self): #NOTE: imm for B is [12:1], not [11:0]. [0:1] is still 1 bit, converts boolean to 1-bit
+        return Bits().join([self.imm[0:1], self.imm[2:8], self.rs2, self.rs1, self.funct3, self.imm[8:12], self.imm[1:2], self.opcode]) 
+    def gen_J(self):
+        self = self.gen_random()
+        self.opcode = Bits(bin="1101111", length=7)
+        return self
+    def gen_J_instr(self):
+        return Bits().join([])
     def bin(self): #generates the binary instruction
         match op[self.opcode]:
             case "R-Type": return (self.gen_R_instr()).bin
             case "I-Type" | "I-Type Load": return (self.gen_I_instr()).bin
             case "S-Type": return (self.gen_S_instr()).bin
+            case "B-Type": return (self.gen_B_instr()).bin
     
 class testcase(instruction): #tests a singular instruction
     def __init__(self, instr, DUT, prior_rd1=0, prior_memory=0):
@@ -329,6 +345,7 @@ class testcase(instruction): #tests a singular instruction
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
         word_imm = self.imm[0:12] #sanity check
+        B_imm = self.imm[1:13]
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
@@ -351,6 +368,9 @@ class testcase(instruction): #tests a singular instruction
             case "S-Type":
                 print(f"Name: {Mfunct3[self.funct3][1]}")
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={word_imm.int}")
+            case "B-Type":
+                print(f"Name: {Bfunct3[self.funct3]}")
+                print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={B_imm.int}")
         if(len(self.bin()) != 32):
             print(f"Invalid instruction length: {len(self.bin())} != 32")
         print(f"Instruction: {(self.bin())}") 
@@ -374,9 +394,10 @@ class testcase(instruction): #tests a singular instruction
     def model(self, prior): #returns the expected rd value
         #prior always has prior[0] = rd, prior[1] = rd1, and prior[2] can be rd2 or none
         #load: prior = [rd, M, rd1]
-        #store: prior =  [M, rd1, rd2] ("pre" has [rd1, rd2])
+        #store: prior =  [M, rd1, rd2] 
+        #branch: prior = [PC, rd1, rd2]
         rd1 = (prior[1]) 
-        # DUT values shouldn't be extracted here, only expected test values.
+        #NOTE: DUT values shouldn't be extracted here, only expected test values.
         match op[self.opcode]: #setting field operand (masking, signed vs unsigned, rd2 vs memory vs imm, etc.)
             case "R-Type": 
                 field = prior[2]
@@ -398,6 +419,16 @@ class testcase(instruction): #tests a singular instruction
                         if(Mfunct3[self.funct3][1] == "sh"): field = binary_to_signed(field, 16)
                     case "sw": field = prior[2]
                 return field
+            case "B-Type": #if statement checking. Pretty simple here, since python already has it
+                branch = prior[0] + (self.imm[1:13]).int #Do I have to worry about bltu and bgeu?
+                PC_inc = prior[0]+ 4
+                match Bfunct3[self.funct3]:
+                    case "beq": return branch if (prior[1] == prior[2]) else PC_inc
+                    case "bne": return branch if (prior[1] != prior[2]) else PC_inc
+                    case "blt": return branch if (prior[1] < prior[2]) else PC_inc
+                    case "bge": return branch if (prior[1] >= prior[2]) else PC_inc
+                    case "bltu": return branch if (prior[1] < prior[2]) else PC_inc 
+                    case "bgeu": return branch if (prior[1] >= prior[2]) else PC_inc
             
     def monitor(self, operation): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
@@ -438,9 +469,20 @@ class testcase(instruction): #tests a singular instruction
                     print(f"Actual: M={memory}, rd1={rd1}, imm={dut_fetch.imm(self.dut)}, rd2={rd2}")
                     return memory
                 elif(operation == "pre"):
-                    print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2} ")
+                    print(f"Pre-instruction: M={memory}, rd1={rd1}, rd2={rd2}")
                     print(f"Word-Address:{(rd1 + self.imm.int)>>2}, Byte-Address:{(rd1 + self.imm.int)}")
                     return [memory, rd1, rd2] #no imm value to obtain before clk 
+            case "B-Type": #extract PC value here
+                PC = dut_fetch.PC(self.dut)
+                match Bfunct3[self.funct3]:
+                    case "bltu" | "bgeu": (rd1, rd2) = (dut_fetch.unsigned_reg(self.dut, self.rs1), dut_fetch.unsigned_reg(self.dut, self.rs2))
+                    case _: (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
+                if(operation == "post"):
+                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={dut_fetch.imm(self.dut)}")
+                    return PC
+                elif(operation == "pre"):
+                    print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
+                    return [PC, rd1, rd2]
     def checker(self, expected, actual): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
         match op[self.opcode]: #basic check of values/registers of each instruction
             case "R-Type" | "I-Type": 
@@ -452,6 +494,12 @@ class testcase(instruction): #tests a singular instruction
             case "S-Type": 
                 print(f"Expected Memory: {expected}")
                 fail = dut_fetch.check_memory_instr(self, expected, actual)
+            case "B-Type":
+                fail = 0
+                print(f"Expected PC: {expected}")
+                if(expected != actual):
+                    fail = 1
+                    print(f"Instruction failed: {actual}")
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
         else:
@@ -461,7 +509,7 @@ class testcase(instruction): #tests a singular instruction
     def feed(self): #feeds instruction directly to DUT (beware of race conditions if using fetch_reg)
         self.dut.instr_cocotb.value = int(self.bin(), 2)        
 
-@cocotb.test()
+# @cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -495,7 +543,7 @@ async def R_I_OOP_test(dut):
         else:
             tb.checker(expected, actual)
 
-@cocotb.test()
+# @cocotb.test()
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -516,6 +564,29 @@ async def Memory_instr_test(dut): #naive same testbench format as R & I type
         prior_memory = dut_fetch.memory(dut, prior_rd1, instr.imm.int)
         #NOTE: rd1's value shouldn't change before or during the clk for memory access purposes. rd1 WILL change if rs1 = rd, but accessing the original rd1 will ensure correct operation.
         tb = testcase(instr, dut, prior_rd1, prior_memory)
+        tb.decode(i)
+        tb.feed()
+        
+        prior = tb.monitor("pre") #prior rs1, rs2, rd register values of DUT
+        await RisingEdge(dut.clk) 
+        await Timer(10, units="ns")        
+        
+        expected = tb.model(prior) 
+        actual = tb.monitor("post") 
+        tb.checker(expected, actual)   
+        
+@cocotb.test()
+async def Branch_Jump_instr_test(dut):
+    """Test Branch and other jump instructions"""
+    cocotb.start_soon(generate_clock(dut))
+    await reset_dut(dut)
+    await randomize_rf(dut, 11) #arbitrary for now. Need to determine limits of PC
+    for i in range(10000):
+        test = instruction()
+        
+        instr = test.gen_B()
+        tb = testcase(instr, dut)
+            
         tb.decode(i)
         tb.feed()
         

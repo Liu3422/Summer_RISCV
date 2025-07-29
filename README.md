@@ -8,16 +8,15 @@ Requirements:
 **Cocotb**
 
     Errors:
-        - For a lot of successful tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
+        - For a lot of successful memory tests (6%), the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
             - This is super weird... especially since the tests themselves pass.
+            - Is it prior vs post clk immediate values? One may take the prior instruction's imm while the other takes the current instr imm.
+                - No indication of this with glance at code.
+
         - <5 cases (per 10k) where model outputs 0 for expected memory when it isn't.
 
-        RISCV Instruction Set Manual: 
-        The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware and to allow auxiliary information to be stored in function pointers.
-        SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
-
     Info:
-    - constrain addressing to rd1 + imm <1024.
+    - constrain addressing to rd1 + imm <2048.
     - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
         - Currently no misaligns
         - Follow natural alignment rules: 
@@ -27,8 +26,10 @@ Requirements:
             - This allow applies to store
     - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
 
-    
     Current:
+    B-Type + Jump + U-Type
+        - 50% pass rate. Just initialized only B-Type
+        - This is the last set of instructions to fully verify!!!
     R-Type (and I-Type counterpart)
         - 0% error with N=10,000 in < 5 seconds (100k < 60sec)
         - ~3 overflow cases (.03%), 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
@@ -45,9 +46,11 @@ Requirements:
         - every testbench component (is model + checker sufficient for scoreboard?)
         - inherits instruction class properties 
         - takes in DUT, prior memory and rd1 (for memory access/check)
+    - dut_fetch() class: 
+        - fetches values (reg, imm, memory) from DUT
+        - more advanced methods involve operating on these values and printing statements.
     - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes both and resets. 
 
-    
     Future:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
     - Store instructions into memory for DUT to fetch?
@@ -68,8 +71,9 @@ Requirements:
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
-    Concerns:
-    - What exactly makes something OOP? 
+    RISCV Instruction Set Manual: 
+    The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware and to allow auxiliary information to be stored in function pointers.
+    SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
 **Nexys A7 100T**
 
