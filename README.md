@@ -10,22 +10,10 @@ Requirements:
     Errors:
         - For a lot of successful tests, the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
             - This is super weird... especially since the tests themselves pass.
-            Test 454
-            Instruction type: I-Type Load
-            Name: lb
-            Registers: rd=6, rs1=8, Imm=4
-            Instruction: 00000000010001000000001100000011
-            Pre-instruction: rd=0, M[20(rd1)+0x004(imm)]=-128
-            Word-Address:6, Byte-Address:24
-            Actual: rd=-128, M[20(rd1)+4(imm)]=-128
-            Expected rd: -128
-            Memory doesn't match, probably address mismatch: memory=-0b101010001110101111001110000000, word_data=11010101110001010000110010000000
-            Success! 
-        - <5 cases where model outputs 0 for expected memory when it isn't.
+        - <5 cases (per 10k) where model outputs 0 for expected memory when it isn't.
 
         RISCV Instruction Set Manual: 
-        The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware
-and to allow auxiliary information to be stored in function pointers.
+        The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware and to allow auxiliary information to be stored in function pointers.
         SLL, SRL, and SRA perform logical left, logical right, and arithmetic right shifts on the value in register rs1 by the shift amount held in the lower FIVE bits of register rs2.
 
     Info:
@@ -42,7 +30,6 @@ and to allow auxiliary information to be stored in function pointers.
         - Do I want this in monitor or model?
         - monitor will mean not seeing the whole word in memory. Do I need to?
 
-    - convert more of the program into OOP classes/objects, its getting pretty long. 
     
     Current:
     R-Type (and I-Type counterpart)
@@ -56,7 +43,7 @@ and to allow auxiliary information to be stored in function pointers.
         - All instructions follow natural alignment.
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - every testbench component (is model + checker sufficient for scoreboard?) featured in the instruction() class
-    - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes and resets. 
+    - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes both and resets. 
     
     Future:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
@@ -74,7 +61,9 @@ and to allow auxiliary information to be stored in function pointers.
         - Moving from hardcoded debug prints to OOP logging. 
     - Split "instruction" class with "test" class (decode, monitor, model, etc.)
         - test class will be a child and inherit the instruction class. OOP opportunity!
-
+    - Modularized checker more to allow for more advanced checks.
+        - Currently only checks instruction's register/memory values.
+        
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
