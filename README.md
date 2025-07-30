@@ -14,6 +14,10 @@ Requirements:
                 - No indication of this with glance at code.
 
         - <5 cases (per 10k) where model outputs 0 for expected memory when it isn't.
+        - Immediate extraction often has some signed vs unsigned troubles:
+            - abs(model_imm - negative_DUT_imm) = 4096 (ex. 1792 - -2304 = 4096)
+            - 4096 = 2^12, the MSB. 
+            - Solution: make sure the MSB is -4096, not +4096. Turns out I need to call self.imm[0:13], not self.imm[1:13] (since self.imm[0] is MSB, Bits is big endian)
 
     Info:
     - constrain addressing to rd1 + imm <2048.
@@ -28,7 +32,7 @@ Requirements:
 
     Current:
     B-Type + Jump + U-Type
-        - 50% pass rate. Just initialized only B-Type
+        - B-Type 100% pass rate! (even with 100k tests)
         - This is the last set of instructions to fully verify!!!
     R-Type (and I-Type counterpart)
         - 0% error with N=10,000 in < 5 seconds (100k < 60sec)

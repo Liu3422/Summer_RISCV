@@ -348,7 +348,7 @@ class testcase(instruction): #tests a singular instruction
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
         word_imm = self.imm[0:12] #sanity check
-        B_imm = imm_B(self.imm[1:13].int)
+        B_imm = imm_B(self.imm[0:13].int)
 
         match op[self.opcode]:
             case "R-Type":
@@ -424,7 +424,7 @@ class testcase(instruction): #tests a singular instruction
                     case "sw": field = prior[2]
                 return field
             case "B-Type": #if statement checking. Pretty simple here, since python already has it
-                B_imm = imm_B(self.imm[1:13].int)
+                B_imm = imm_B(self.imm[0:13].int)
                 branch = signed_to_binary(prior[0] + B_imm)
                 PC_inc = signed_to_binary(prior[0] + 4)
                 match Bfunct3[self.funct3]:
@@ -483,7 +483,7 @@ class testcase(instruction): #tests a singular instruction
                     case "bltu" | "bgeu": (rd1, rd2) = (dut_fetch.unsigned_reg(self.dut, self.rs1), dut_fetch.unsigned_reg(self.dut, self.rs2))
                     case _: (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
                 if(operation == "post"):
-                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={dut_fetch.imm(self.dut)}")
+                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={binary_to_signed(dut_fetch.imm(self.dut), 13)}")
                     return PC
                 elif(operation == "pre"):
                     print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
@@ -501,8 +501,8 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected Memory: {expected}")
                 fail = dut_fetch.check_memory_instr(self, expected, actual)
             case "B-Type":
-                imm = imm_B(self.imm[1:13].int)
-                imm_actual = dut_fetch.imm(self.dut)
+                imm = imm_B(self.imm[0:13].int)
+                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 13)
                 print(f"Expected PC: {expected}")
                 if(expected != actual):
                     fail += 1
@@ -510,7 +510,11 @@ class testcase(instruction): #tests a singular instruction
                 if(imm != imm_actual):
                     fail += 1
                     print(f"Incorrect immediate value for model: {bin(imm)} != {bin(imm_actual)}")
-                    print(f"self.imm[1:13].int = {self.imm[1:13].int}")
+                    print(f"self.imm[1:13].bin = {self.imm[0:13].bin}")
+                    print(f"Difference between imm: {(imm - imm_actual)}")
+                    print(f"Raw imm bits [1:13]: {self.imm[0:13].bin}")
+                    print(f"Bit 12 (sign): {self.imm[12]}")
+                    print(f"After sign extension: {binary_to_signed(self.imm[0:13].int, 13)}")
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
         else:
