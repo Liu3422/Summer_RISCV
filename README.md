@@ -14,21 +14,12 @@ Requirements:
                 - No indication of this with glance at code.
 
         - <5 cases (per 10k) where model outputs 0 for expected memory when it isn't.
-        - Immediate extraction often has some signed vs unsigned troubles:
-            - abs(model_imm - negative_DUT_imm) = 4096 (ex. 1792 - -2304 = 4096)
-            - 4096 = 2^12, the MSB. 
-            - Solution: make sure the MSB is -4096, not +4096. Turns out I need to call self.imm[0:13], not self.imm[1:13] (since self.imm[0] is MSB, Bits is big endian)
 
     Info:
-    - constrain addressing to rd1 + imm <2048.
-    - implement byte-offset, byte addressing per word in memory. Only support naturally aligned address.
-        - Currently no misaligns
-        - Follow natural alignment rules: 
-            lb: any. 
-            lh: 0 -> lower, 2 -> upper. 
-            lw: 0 -> word (self-explanatory)
-            - This allow applies to store
-    - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
+        - Difference between instruction immediate and actual immediate for U-Type.
+            - Actual imm is the instr field left shifted 12.
+        - Decode will show the instr field
+        - Actual will show the actual imm
 
     Current:
     B-Type + Jump + U-Type
@@ -43,6 +34,15 @@ Requirements:
         - ~0% error with N=10,000 in <10 seconds (100k ~ 60sec)
         - Uses an addi instruction to write/set rs1 value prior to test.
         - All instructions follow natural alignment.
+            - constrain addressing to rd1 + imm <2048.
+        - implement byte-offset, byte addressing per word in memory
+        - Currently no misaligns
+        - Follow natural alignment rules: 
+            lb: any. 
+            lh: 0 -> lower, 2 -> upper. 
+            lw: 0 -> word (self-explanatory)
+            - This also applies to store
+        - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
     - hash maps for converting opcode, funct3, and ALU_Operation to names
     - instruction() class: creates instructions to feed to dut and testbench
     - testcase(instruction) class: 

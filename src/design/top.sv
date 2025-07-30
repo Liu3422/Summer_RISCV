@@ -40,14 +40,13 @@ always_ff @(posedge clk, negedge n_rst) begin
 
 end
 
-logic zero, UncondJump, jal_cond, jalr_cond, branch_cond, branch_unsigned;
+logic zero, UncondJump, jal_cond, jalr_cond, branch_cond;
 logic [1:0] PCSrc;
 logic [2:0] funct3;
 /* synthesis keep */ logic [31:0] imm_out, rd1, beq_value; //synthesis directive
 assign funct3 = instr[14:12];
 
 always_comb begin
-    branch_unsigned = 0;
     branch_cond = 0;
     if(PCSrc == 2'b1) begin
         case(funct3)
@@ -55,14 +54,8 @@ always_comb begin
         3'd1: branch_cond = !zero; //bne
         3'd4: branch_cond = ($signed(ALU_Out) < 0); //blt
         3'd5: branch_cond = ($signed(ALU_Out) >= 0); //bge
-        3'd6: begin //bltu
-            branch_cond = (ALU_Out >= rd1);
-            branch_unsigned = 1'b1;
-        end
-        3'd7: begin //bgeu
-            branch_cond = (ALU_Out < rd1);
-            branch_unsigned = 1'b1;
-        end
+        3'd6: branch_cond = (ALU_Out >= rd1); //bltu
+        3'd7: branch_cond = (ALU_Out < rd1); //bgeu
         default: branch_cond = 0; //undefined region of operation, no branch.
         endcase
     end
@@ -125,8 +118,8 @@ decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
 logic [3:0] ALU_Operation; //output from ALU_control
 logic [31:0] ALU_Out, ALU_in1, ALU_in2; //ALU_in1: rd1 or PC. ALU_in2: rd2 or imm_gen
 
-assign ALU_in2 = (ALUSrc) ? (Unsigned ? (imm_out): {{20{imm_out[11]}}, imm_out[11:0]} ): rd2; 
-assign ALU_in1 = (UncondJump) ? (PC + 4) : (Auipc) ? PC : rd1; 
+assign ALU_in2 = (ALUSrc) ? (Unsigned ? ({imm_out[31:12], 12'b0}): {{20{imm_out[11]}}, imm_out[11:0]} ): rd2; 
+assign ALU_in1 = (UncondJump) ? (PC + 4) : (Unsigned ? ((Auipc) ? PC : 32'b0): rd1); 
 
 ALU DUT4 (  
     .ALU_Operation(ALU_Operation),

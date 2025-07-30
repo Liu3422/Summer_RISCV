@@ -41,7 +41,8 @@ module imm_gen(
             S: imm_out        = {{20{instr[31]}}, instr[31:25], instr[11:7]};
             SB: imm_out       = {{20{instr[31]}}, instr[7], instr[30:25], instr[11:8], 1'b0};
             UJ: imm_out       = {{12{instr[31]}}, instr[19:12], instr[20], instr[30:25], instr[24:21], 1'b0};
-            JALR: imm_out     = {{20{instr[31]}}, instr[20], instr[30:25], instr[11:8], 1'b0}; //Unconditional Jump
+            JALR: imm_out     = {{20{instr[31]}}, instr[31:20]}; //jalr is I-type, should be identical
+            //JALR: imm_out = {{20{instr[31]}}, instr[20], instr[30:25], instr[11:8], 1'b0}; //Unconditional Jump
             U: imm_out        = {instr[31:12], 12'b0};
             AUIPC: imm_out    = {instr[31:12], 12'b0}; 
             default: imm_out  = 32'b0; //edge case?

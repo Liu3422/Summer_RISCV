@@ -16,8 +16,10 @@ SHIFT_MASK = 0x1F
 BYTE_MASK = 0xFF
 HALF_MASK = 0x0000FFFF
 HALF_HIGH_MASK = 0xFFFF0000
-WORD_MASK = 0xFFFFFFFF #Used for sll/i
+WORD_MASK = 0xFFFFFFFF #Used for sll/i and U-Type imm
 B_IMM_MASK = 0b1111_1111_1111_0
+J_IMM_MASK = 0b1111_1111_1111_1111_1111_0
+U_IMM_MASK = 0x000FFFFF #little endian
 NUM_WORDS = 32
 STORE_LIM = 1024 #
 
@@ -39,7 +41,13 @@ def signed_to_binary(val):
 def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift. This is not preserving sign. 
 def imm_B(val):
-    return binary_to_signed(val & B_IMM_MASK, 13) #remove the last bit
+    return binary_to_signed(val[0:13].int & B_IMM_MASK, 13) #remove the last bit
+def imm_J(val):
+    return binary_to_signed(val[0:21].int & J_IMM_MASK, 21)
+def imm_U(val): #this extracts the instr field imm, not the "actual" << 12 value
+    return binary_to_signed((val[0:32].int & U_IMM_MASK), 20)
+def imm_U_actual(val): #this extracts the U-Type imm to be added to the upper word, already shifted.
+    return imm_U(val) << 12
 # Make this into a class? These functions sets/resets the dut. How to make async def class?
 async def reset_dut(dut):
     print("Resetting DUT \n")
@@ -163,6 +171,12 @@ class dut_fetch(): #fetches value from DUT
         return DUT.DUT_RF.RF[bits_index.uint].value.integer
     def imm(DUT):
         return DUT.imm_out.value.signed_integer
+    def imm_B(DUT):
+        return binary_to_signed(dut_fetch.imm(DUT), 13)
+    def imm_J(DUT):
+        return binary_to_signed(dut_fetch.imm(DUT), 21)
+    def imm_U(DUT):
+        return binary_to_signed(dut_fetch.imm(DUT), 32)
     def unsigned_imm(DUT):
         return DUT.imm_out.value.integer
     def control(DUT):
@@ -251,7 +265,22 @@ class dut_fetch(): #fetches value from DUT
                 assert((dut.DUT_Data.MemWr.value == 1) and (dut.DUT_Data.MemRead.value == 0))
             print(f"addr={dut.DUT_Data.addr.value.integer},word_addr={dut.DUT_Data.word_addr.value.integer}, byte_offset={dut.DUT_Data.byte_offset.value.integer}")
         return fail
-
+    def check_branch_instr(self, expected, actual):
+        fail = 0
+        imm = imm_B(self.imm)
+        imm_actual = dut_fetch.imm_B(self.dut)
+        if(expected != actual):
+            fail += 1
+            print(f"Instruction failed: {(expected - actual)} difference")
+        if(imm != imm_actual):
+            fail += 1
+            print(f"Incorrect immediate value for model: {bin(imm)} != {bin(imm_actual)}")
+            print(f"self.imm[1:13].bin = {self.imm[0:13].bin}")
+            print(f"Difference between imm: {(imm - imm_actual)}")
+            print(f"Raw imm bits [1:13]: {self.imm[0:13].bin}")
+            print(f"Bit 12 (sign): {self.imm[12]}")
+            print(f"After sign extension: {binary_to_signed(self.imm[0:13].int, 13)}")
+        return fail
 class instruction(): #generates the instruction to feed into DUT/testbench
     def __init__(self):
         self.rs1 = None
@@ -339,7 +368,7 @@ class instruction(): #generates the instruction to feed into DUT/testbench
         self.opcode = Bits(bin=random.choice(["0110111", "0010111"]))
         return self
     def gen_U_instr(self): #NOTE: imm for U is [31:12]. The two U-Type instr have different op-codes
-        return Bits().join([self.imm[12:31], self.rd, self.opcode])
+        return Bits().join([self.imm[12:32], self.rd, self.opcode])
     def gen_I_jump(self):
         self = self.gen_I()
         self.opcode = Bits(bin="1100111", length=7)
@@ -365,9 +394,9 @@ class testcase(instruction): #tests a singular instruction
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
         word_imm = self.imm[0:12] #sanity check
-        B_imm = imm_B(self.imm[0:13].int)
-        J_imm = self.imm[0:32]
-        U_imm = self.imm[0:21]
+        B_imm = imm_B(self.imm)
+        J_imm = imm_J(self.imm)
+        U_imm = imm_U(self.imm) #instr field displayed in instr
 
         match op[self.opcode]:
             case "R-Type":
@@ -395,14 +424,14 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Name: {Bfunct3[self.funct3]}")
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={B_imm}")
             case "J-Type":
-                print(f"Name: jal")
-                print(f"Registers: rd={self.rd.uint}, imm={J_imm.int}")
+                print(f"Name: jal ")
+                print(f"Registers: rd={self.rd.uint}, imm={J_imm}")
             case "I-Type Jump":
                 print(f"Name: jalr")
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
             case "U-Type Load" | "U-Type PC":
                 print(f"Name: {Uop[self.opcode]}")
-                print(f"Registers: rd={self.rd.uint}, imm={U_imm.int}")
+                print(f"Registers: rd={self.rd.uint}, imm={U_imm}")
         if(len(self.bin()) != 32):
             print(f"Invalid instruction length: {len(self.bin())} != 32")
         print(f"Instruction: {(self.bin())}") 
@@ -430,8 +459,8 @@ class testcase(instruction): #tests a singular instruction
         #branch: prior = [PC, rd1, rd2]
         #jal/jalr = [rd, PC, (rd1 if jalr)]
         rd1 = (prior[1]) #hardcoded only for certain cases, replace later!
-        J_imm = self.imm[0:32]
-        U_imm = self.imm[0:21]
+        J_imm = imm_J(self.imm)
+        U_imm = imm_U_actual(self.imm)
         #NOTE: DUT values shouldn't be extracted here, only expected test values.
         match op[self.opcode]: #setting field operand (masking, signed vs unsigned, rd2 vs memory vs imm, etc.)
             case "R-Type": 
@@ -455,8 +484,7 @@ class testcase(instruction): #tests a singular instruction
                     case "sw": field = prior[2]
                 return field
             case "B-Type": #if statement checking. Pretty simple here, since python already has it
-                B_imm = imm_B(self.imm[0:13].int)
-                branch = signed_to_binary(prior[0] + B_imm)
+                branch = signed_to_binary(prior[0] + imm_B(self.imm))
                 PC_inc = signed_to_binary(prior[0] + 4)
                 match Bfunct3[self.funct3]:
                     case "beq": return branch if (prior[1] == prior[2]) else PC_inc
@@ -467,16 +495,16 @@ class testcase(instruction): #tests a singular instruction
                     case "bgeu": return branch if (prior[1] >= prior[2]) else PC_inc
             case "J-Type": #NOTE: 2 values to model
                 rd = prior[1] + 4
-                PC = prior[1] + self.imm.int
+                PC = prior[1] + J_imm
                 return [rd, PC]
             case "I-Type Jump": #NOTE: 2 values to model
                 rd = prior[1] + 4
-                PC = prior[2] + self.imm.int
+                PC = prior[2] + self.imm[0:12].int
                 return [rd, PC]
             case "U-Type Load":
-                return self.imm.int
+                return U_imm
             case "U-Type PC":
-                return prior[1] + self.imm.int
+                return prior[1] + U_imm
     def monitor(self, operation): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         # "pre"  : won't print imm 
@@ -525,7 +553,7 @@ class testcase(instruction): #tests a singular instruction
                     case "bltu" | "bgeu": (rd1, rd2) = (dut_fetch.unsigned_reg(self.dut, self.rs1), dut_fetch.unsigned_reg(self.dut, self.rs2))
                     case _: (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
                 if(operation == "post"):
-                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={binary_to_signed(dut_fetch.imm(self.dut), 13)}")
+                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={dut_fetch.imm_B(self.dut)}")
                     return PC
                 elif(operation == "pre"):
                     print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
@@ -533,7 +561,7 @@ class testcase(instruction): #tests a singular instruction
             case "J-Type":
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, PC={PC}, imm={binary_to_signed(dut_fetch.imm(self.dut), 21)}")
+                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm_J(self.dut)}")
                     return [rd, PC]
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}")
@@ -541,14 +569,14 @@ class testcase(instruction): #tests a singular instruction
             case "I-Type Jump": #follows B-Type previous_rd1 logic?                
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, PC={PC}, rd1={rd1}, imm={binary_to_signed(dut_fetch.imm(self.dut), 12)}")
+                    print(f"Actual: rd={rd}, PC={PC}, rd1={rd1}, imm={dut_fetch.imm(self.dut)}")
                     return [rd, PC]
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}, rd1={rd1}")
                     return [rd, PC, rd1]
             case "U-Type Load":
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, imm={binary_to_signed(dut_fetch.imm(self.dut), 32)}")
+                    print(f"Actual: rd={rd}, imm={dut_fetch.imm_U(self.dut)}")
                     return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}")
@@ -556,13 +584,14 @@ class testcase(instruction): #tests a singular instruction
             case "U-Type PC":
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, PC={PC}, imm={binary_to_signed(dut_fetch.imm(self.dut), 32)}")
+                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm_U(self.dut)}")
                     return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}")
                     return [rd, PC]
     def checker(self, expected, actual): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
         fail = 0
+        expected_string = ["rd", "PC"]
         match op[self.opcode]: #basic check of values/registers of each instruction
             case "R-Type" | "I-Type": 
                 print(f"Expected rd: {expected}")
@@ -574,24 +603,13 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected Memory: {expected}")
                 fail = dut_fetch.check_memory_instr(self, expected, actual)
             case "B-Type":
-                imm = imm_B(self.imm[0:13].int)
-                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 13)
                 print(f"Expected PC: {expected}")
-                if(expected != actual):
-                    fail += 1
-                    print(f"Instruction failed: {(expected - actual)} difference")
-                if(imm != imm_actual):
-                    fail += 1
-                    print(f"Incorrect immediate value for model: {bin(imm)} != {bin(imm_actual)}")
-                    print(f"self.imm[1:13].bin = {self.imm[0:13].bin}")
-                    print(f"Difference between imm: {(imm - imm_actual)}")
-                    print(f"Raw imm bits [1:13]: {self.imm[0:13].bin}")
-                    print(f"Bit 12 (sign): {self.imm[12]}")
-                    print(f"After sign extension: {binary_to_signed(self.imm[0:13].int, 13)}")
+                fail = dut_fetch.check_branch_instr(self, expected, actual)
             case "J-Type":
-                imm = self.imm.int
-                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 21)
+                imm = imm_J(self.imm)
+                imm_actual = dut_fetch.imm_J(self.dut)
                 for i in [0,1]:
+                    print(f"Expected {expected_string[i]}: {expected[i]}")
                     if(expected[i] != actual[i]):
                         fail += 1
                         print(f"Instruction failed: {(expected[i]- actual[i])} difference")
@@ -599,28 +617,26 @@ class testcase(instruction): #tests a singular instruction
                     fail += 1
             case "I-Type Jump":                
                 imm = self.imm.int
-                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 12)
+                imm_actual = dut_fetch.imm(self.dut)
                 for i in [0,1]:
+                    print(f"Expected {expected_string[i]}: {expected[i]}")
                     if(expected[i] != actual[i]):
                         fail += 1
                         print(f"Instruction failed: {(expected[i]- actual[i])} difference")
                 if(imm != imm_actual):
                     fail += 1
-            case "U-Type Load":
-                imm = self.imm.int
-                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 31)
+            case "U-Type Load" | "U-Type PC":
+                imm = imm_U(self.imm)
+                imm_actual = dut_fetch.imm_U(self.dut)
+                imm_actual_field = imm_U_actual(self.imm)
                 if(expected != actual):
                     fail += 1
                     print(f"Instruction failed: {(expected - actual)} difference")
-                if(imm != imm_actual):
-                    fail += 1
-            case "U-Type PC":                
-                imm = self.imm.int
-                imm_actual = binary_to_signed(dut_fetch.imm(self.dut), 31)
-                if(expected != actual):
-                    fail += 1
-                    print(f"Instruction failed: {(expected - actual)} difference")
-                if(imm != imm_actual):
+                if(imm_actual != imm_actual_field):
+                    print(f"Mismatching immediate values: DUT={bin(imm_actual)}")
+                    print(f"self.imm[0:32].bin: {self.imm[0:32].bin}")
+                    print(f"self.imm[12:32].bin: {self.imm[12:32].bin}")
+                    
                     fail += 1
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
@@ -707,10 +723,10 @@ async def Branch_Jump_instr_test(dut):
         test = instruction()
         instr_type = random.choice([0,1,2,3])  #randomize instruction type
         match instr_type:
-            # case 0: instr = test.gen_B()
-            case 1: instr = test.gen_J()
-            case 0 | 2: instr = test.gen_U()
-            case 3: instr = test.gen_I_jump()
+            # case _: instr = test.gen_B()
+            # case 1: instr = test.gen_J()
+            case _: instr = test.gen_U()
+            # case 3: instr = test.gen_I_jump()
         tb = testcase(instr, dut)
             
         tb.decode(i)
