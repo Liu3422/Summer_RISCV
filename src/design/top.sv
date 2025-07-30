@@ -56,11 +56,11 @@ always_comb begin
         3'd4: branch_cond = ($signed(ALU_Out) < 0); //blt
         3'd5: branch_cond = ($signed(ALU_Out) >= 0); //bge
         3'd6: begin //bltu
-            branch_cond = ($signed(ALU_Out) >= 0);
+            branch_cond = (ALU_Out >= rd1);
             branch_unsigned = 1'b1;
         end
         3'd7: begin //bgeu
-            branch_cond = ($signed(ALU_Out) < 0);
+            branch_cond = (ALU_Out < rd1);
             branch_unsigned = 1'b1;
         end
         default: branch_cond = 0; //undefined region of operation, no branch.
@@ -70,7 +70,7 @@ end
 assign jal_cond = (UncondJump & PCSrc == 2'b01);
 assign jalr_cond = (UncondJump & PCSrc == 2'b10);
 
-assign beq_value = branch_unsigned ? {20'b0, imm_out[11:0]}: {{20{imm_out[11]}}, imm_out[11:0]}; // << 1; //debug purposes
+assign beq_value = {{19{imm_out[12]}}, imm_out[12:0]}; // immediate is always signed
 always_comb begin
     if (jal_cond) 
         PC_Next = PC + imm_out;

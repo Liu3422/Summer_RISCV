@@ -17,6 +17,7 @@ BYTE_MASK = 0xFF
 HALF_MASK = 0x0000FFFF
 HALF_HIGH_MASK = 0xFFFF0000
 WORD_MASK = 0xFFFFFFFF #Used for sll/i
+B_IMM_MASK = 0b1111_1111_1111_0
 NUM_WORDS = 32
 STORE_LIM = 1024 #
 
@@ -37,6 +38,8 @@ def signed_to_binary(val):
     return val & ((1 << 32) - 1) #2's complement
 def rshift(val, n): return val>>n if val >= 0 else (val+0x100000000)>>n #logical right shift
 def lshift(val, n): return (val % 0x100000000) << n #logical left shift. This is not preserving sign. 
+def imm_B(val):
+    return binary_to_signed(val & B_IMM_MASK, 13) #remove the last bit
 # Make this into a class? These functions sets/resets the dut. How to make async def class?
 async def reset_dut(dut):
     print("Resetting DUT \n")
@@ -345,7 +348,8 @@ class testcase(instruction): #tests a singular instruction
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
         word_imm = self.imm[0:12] #sanity check
-        B_imm = self.imm[1:13]
+        B_imm = imm_B(self.imm[1:13].int)
+
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
@@ -370,7 +374,7 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={word_imm.int}")
             case "B-Type":
                 print(f"Name: {Bfunct3[self.funct3]}")
-                print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={B_imm.int}")
+                print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={B_imm}")
         if(len(self.bin()) != 32):
             print(f"Invalid instruction length: {len(self.bin())} != 32")
         print(f"Instruction: {(self.bin())}") 
@@ -420,8 +424,9 @@ class testcase(instruction): #tests a singular instruction
                     case "sw": field = prior[2]
                 return field
             case "B-Type": #if statement checking. Pretty simple here, since python already has it
-                branch = prior[0] + (self.imm[1:13]).int #Do I have to worry about bltu and bgeu?
-                PC_inc = prior[0]+ 4
+                B_imm = imm_B(self.imm[1:13].int)
+                branch = signed_to_binary(prior[0] + B_imm)
+                PC_inc = signed_to_binary(prior[0] + 4)
                 match Bfunct3[self.funct3]:
                     case "beq": return branch if (prior[1] == prior[2]) else PC_inc
                     case "bne": return branch if (prior[1] != prior[2]) else PC_inc
@@ -484,6 +489,7 @@ class testcase(instruction): #tests a singular instruction
                     print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
                     return [PC, rd1, rd2]
     def checker(self, expected, actual): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
+        fail = 0
         match op[self.opcode]: #basic check of values/registers of each instruction
             case "R-Type" | "I-Type": 
                 print(f"Expected rd: {expected}")
@@ -495,11 +501,16 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected Memory: {expected}")
                 fail = dut_fetch.check_memory_instr(self, expected, actual)
             case "B-Type":
-                fail = 0
+                imm = imm_B(self.imm[1:13].int)
+                imm_actual = dut_fetch.imm(self.dut)
                 print(f"Expected PC: {expected}")
                 if(expected != actual):
-                    fail = 1
-                    print(f"Instruction failed: {actual}")
+                    fail += 1
+                    print(f"Instruction failed: {(expected - actual)} difference")
+                if(imm != imm_actual):
+                    fail += 1
+                    print(f"Incorrect immediate value for model: {bin(imm)} != {bin(imm_actual)}")
+                    print(f"self.imm[1:13].int = {self.imm[1:13].int}")
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
         else:
