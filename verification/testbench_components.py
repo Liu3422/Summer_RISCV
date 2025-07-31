@@ -8,6 +8,7 @@ from cocotb.triggers import Timer, RisingEdge
 
 MAX_32B_signed = 2**31 - 1
 MIN_32B_signed = -(2**31)
+MAX_32B_unsigned = 2**32 - 1
 SHIFT_MASK = 0x1F
 BYTE_MASK = 0xFF
 HALF_MASK = 0x0000FFFF
@@ -687,18 +688,29 @@ class environment(testcase): #creates the whole testing environment
         match op[self.opcode]:
             case "J-Type" | "I-Type Jump":
                 for expected_value in self.expected:
-                    if((expected_value > MAX_32B_signed) or (expected_value < MIN_32B_signed)): #Overflow check
-                        print(f"Signed overflow detected: {expected_value} \n")
+                    if((expected_value > MAX_32B_unsigned)): #Overflow check
+                        print(f"Unsigned overflow detected: {expected_value} \n")
                         return True
                 return False
-            case _:
-                if (self.expected.bit_length() > 64): 
-                    print(f"Severe overflow detected: {self.expected.bit_length()} bits") 
-                    await random_reset_dut(self.dut)
-                    return True
-                elif((self.expected > MAX_32B_signed) or (self.expected < MIN_32B_signed)): #Overflow check
-                    print(f"Signed overflow detected: {self.expected} \n")
-                    return True
-                else:
+            case "I-Type Load":
+                if(Mfunct3[self.funct3][0] == "lbu" or Mfunct3[self.funct3][0] == "lhu"):
+                    if((self.expected > MAX_32B_unsigned)): #Overflow check
+                            print(f"Unsigned overflow detected: {expected_value} \n")
+                            return True
                     return False
-            
+            case "B-Type":
+                if(Bfunct3[self.funct3] == "bltu" or Bfunct3[self.funct3] == "bgeu"):
+                    if((self.expected > MAX_32B_unsigned)): #Overflow check
+                            print(f"Unsigned overflow detected: {expected_value} \n")
+                            return True
+                    return False
+        if (self.expected.bit_length() > 64): 
+            print(f"Severe overflow detected: {self.expected.bit_length()} bits") 
+            await random_reset_dut(self.dut)
+            return True
+        elif((self.expected > MAX_32B_signed) or (self.expected < MIN_32B_signed)): #Overflow check
+            print(f"Signed overflow detected: {self.expected} \n")
+            return True
+        else:
+            return False
+        
