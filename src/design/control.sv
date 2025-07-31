@@ -31,7 +31,7 @@ module control(
     MemtoReg, // writeback:  0: ALU. 1:data memory
     UncondJump, //0: normal. 1: rd1 = PC + 4
     Auipc, //0: normal. 1: rd1 = PC 
-    Unsigned, //0: signed imm. 1: unsigned imm
+    Utype, //0: signed imm. 1: Utype imm
     output logic [1:0] ALUOp,
     PCSrc //0: PC + 4. 1: Branch Target (PC += imm_gen). ??2: PC = rs1 + imm
     );
@@ -45,18 +45,18 @@ module control(
               LUI   = 7'b0110111,
               AUIPC = 7'b0010111;
     always_comb begin //note: MemRead is not implemented yet.
-        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Unsigned} = 12'b001000010000;
+        {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Utype} = 12'b001000010000;
         case(instr)
         BTYPE: {PCSrc, ALUSrc, ALUOp, RegWr} = 6'b010010; 
         RTYPE: {ALUSrc, ALUOp} = 3'b010;
         STORE: {MemWr, RegWr} = 2'b10; 
         LOAD : {MemtoReg, MemRead, RegWr} = 3'b111;
         ITYPE: {ALUOp} = 2'b11;
-        JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b0100111; 
-        JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b1000111;
-        LUI  : {ALUOp, Unsigned} = 3'b001; 
-        AUIPC: {Auipc, ALUOp, Unsigned} = 4'b1001;
-        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Unsigned} = 12'b01000010000;
+        JAL  : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b011_00_11; 
+        JALR : {PCSrc, ALUSrc, ALUOp, RegWr, UncondJump} = 7'b101_00_11;
+        LUI  : {ALUOp, Utype} = 3'b001; 
+        AUIPC: {Auipc, ALUOp, Utype} = 4'b1001;
+        default: {PCSrc, ALUSrc, ALUOp, MemWr, MemtoReg, RegWr, MemRead, UncondJump, Auipc, Utype} = 12'b01000010000;
         endcase
     end
 endmodule

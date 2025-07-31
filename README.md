@@ -22,14 +22,17 @@ Requirements:
         - Actual will show the actual imm
 
     Current:
+    Full constrained random coverage of all instructions (other than ecall and ebreak).
     B-Type + Jump + U-Type
-        - B-Type 100% pass rate! (even with 100k tests)
+        - All instructions 100% pass rate! (even with 100k tests). 
         - This is the last set of instructions to fully verify!!!
+
     R-Type (and I-Type counterpart)
         - 0% error with N=10,000 in < 5 seconds (100k < 60sec)
         - ~3 overflow cases (.03%), 10% illegal shift -> swapped to alternative instruction. 0 illegal shift instructions actually occur.
         - directly feeding instruction without use of instruction memory/fetch register. No longer need to uncomment fetch_reg_file for cocotb tests.
         - basic overflow error + instruction error (negative shift) handling
+
     Memory (I-Type Load and S-Type)
         - ~0% error with N=10,000 in <10 seconds (100k ~ 60sec)
         - Uses an addi instruction to write/set rs1 value prior to test.
@@ -59,18 +62,10 @@ Requirements:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
     - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
-    - Constrained random coverage with jumping instructions?
-        - Extremely unpredictable behavior prone to looping.
-        - What exactly would this prove verification-wise?
-        Solution: only check the PC. 
-        - Would have to keep in mind PC's bounds (negative and overflow?) 
-        - Whether feeding instructions directly would still be verifying jumps
     - "Fail-mode" with truly random/incorrect instructions
         - Only start doing after all other instructions are done.
     - Use cocotb's built-in "logging" library instead of manually printing.
         - Moving from hardcoded debug prints to OOP logging. 
-    - Modularized checker more to allow for more advanced checks.
-        - Currently only checks instruction's register/memory values.
 
     Code Quality (in progress):
     - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.

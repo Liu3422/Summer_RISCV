@@ -125,7 +125,6 @@ Rfunct3 = { #first entry is funct7=0, second is funct7=0x20
     Bits(uint="6", length=3) : ["or"], 
     Bits(uint="7", length=3) : ["and"],
 }
-
 Mfunct3 = { #load and store funct3 conversion. NOTE: store only has 0,1,2, for funct3
     Bits(uint="0", length=3) : ["lb", "sb", "Byte"],
     Bits(uint="1", length=3) : ["lh", "sh", "Half"],
@@ -133,7 +132,6 @@ Mfunct3 = { #load and store funct3 conversion. NOTE: store only has 0,1,2, for f
     Bits(uint="4", length=3) : ["lbu", "Unsigned-Byte"],
     Bits(uint="5", length=3) : ["lhu", "Unsigned-Half"]
 }
-
 Bfunct3 = { #B-Type conversion
     Bits(uint="0", length=3) : "beq",
     Bits(uint="1", length=3) : "bne",
@@ -142,7 +140,6 @@ Bfunct3 = { #B-Type conversion
     Bits(uint="6", length=3) : "bltu",
     Bits(uint="7", length=3) : "bgeu"
 }
-
 ALU_Operation = {
     int("0010", 2) : "ADD",
     int("0110", 2) : "SUB",
@@ -172,11 +169,11 @@ class dut_fetch(): #fetches value from DUT
     def imm(DUT):
         return DUT.imm_out.value.signed_integer
     def imm_B(DUT):
-        return binary_to_signed(dut_fetch.imm(DUT), 13)
+        return DUT.signed_imm.value.signed_integer
     def imm_J(DUT):
-        return binary_to_signed(dut_fetch.imm(DUT), 21)
+        return DUT.J_imm.value.signed_integer
     def imm_U(DUT):
-        return binary_to_signed(dut_fetch.imm(DUT), 32)
+        return dut_fetch.imm(DUT)
     def unsigned_imm(DUT):
         return DUT.imm_out.value.integer
     def control(DUT):
@@ -270,8 +267,15 @@ class dut_fetch(): #fetches value from DUT
         imm = imm_B(self.imm)
         imm_actual = dut_fetch.imm_B(self.dut)
         if(expected != actual):
+            (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
+            unsigned_value = rd1 - rd2
+            if((unsigned_value > MAX_32B_signed) or (unsigned_value < MIN_32B_signed)):
+                print("Overflow occured, test is invalid")
+                return 0 #what would I want to return during overflow?
             fail += 1
             print(f"Instruction failed: {(expected - actual)} difference")
+            print(f"Signed: ALU_in1={self.dut.ALU_in1.value.signed_integer}, ALU_in2={self.dut.ALU_in2.value.signed_integer}, ALU_Out={self.dut.ALU_Out.value.signed_integer}")
+            print(f"branch_cond: {self.dut.branch_cond.value}")
         if(imm != imm_actual):
             fail += 1
             print(f"Incorrect immediate value for model: {bin(imm)} != {bin(imm_actual)}")
@@ -280,6 +284,34 @@ class dut_fetch(): #fetches value from DUT
             print(f"Raw imm bits [1:13]: {self.imm[0:13].bin}")
             print(f"Bit 12 (sign): {self.imm[12]}")
             print(f"After sign extension: {binary_to_signed(self.imm[0:13].int, 13)}")
+        return fail
+    def check_jump_instr(self, expected_rd, actual_rd, expected_PC, actual_PC, imm, imm_actual):
+        fail = 0
+        print(f"Expected rd: {expected_rd}")
+        if(expected_rd != actual_rd):
+            fail += 1
+            print(f"Instruction failed: {(expected_rd - actual_rd)} difference")
+        print(f"Expected PC: {expected_PC}")
+        if(expected_PC != actual_PC):
+            fail += 1
+            print(f"PC failed: {(expected_PC - actual_PC)} difference")
+            print(f"rd1={dut_fetch.reg(self.dut, self.rs1)} imm:{imm_actual}")
+        if(imm != imm_actual): #this error prints twice, but I want it to only print for PC check
+            print(f"Immediate mismatch: DUT={imm_actual}, Model={imm}")
+            fail += 1
+        return fail
+    def check_U_instr(self, expected, actual):
+        fail = 0
+        imm_actual = dut_fetch.imm_U(self.dut)
+        imm_actual_field = imm_U_actual(self.imm)
+        if(expected != actual):
+            fail += 1
+            print(f"Instruction failed: {(expected - actual)} difference")
+        if(imm_actual != imm_actual_field):
+            print(f"Mismatching immediate values: DUT={bin(imm_actual)}")
+            print(f"self.imm[0:32].bin: {self.imm[0:32].bin}")
+            print(f"self.imm[12:32].bin: {self.imm[12:32].bin}")
+            fail += 1
         return fail
 class instruction(): #generates the instruction to feed into DUT/testbench
     def __init__(self):
@@ -394,42 +426,39 @@ class testcase(instruction): #tests a singular instruction
         print(f"Test {test_num}")
         print(f"Instruction type: {op[self.opcode]}")
         word_imm = self.imm[0:12] #sanity check
-        B_imm = imm_B(self.imm)
-        J_imm = imm_J(self.imm)
-        U_imm = imm_U(self.imm) #instr field displayed in instr
-
         match op[self.opcode]:
             case "R-Type":
                 match self.funct7.uint:
                     case 0: print(f"Name: {Rfunct3[self.funct3][0]}") 
                     case 32: print(f"Name: {Rfunct3[self.funct3][1]}") #only place that uses self.funct3[1]
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint} rs2={self.rs2.uint}")
-            case "I-Type": 
+            case "I-Type" | "I-Type Jump" | "I-Type Load": 
                 if((Rfunct3[self.funct3][0] == "srl") and (self.imm.int > 1024)): #srai special case
                     print(f"Name: srai")
                 elif(Rfunct3[self.funct3][0] == "sltu"): #sltiu is unsigned
                     print(f"Name: sltiu")
                     print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.uint}")
                     return
+                elif(op[self.opcode] == "I-Type Load"):
+                    print(f"Name: {Mfunct3[self.funct3][0]}")
+                elif(op[self.opcode] == "I-Type Jump"): 
+                    print(f"Name: jalr")
                 else:
                     print(f"Name: {Rfunct3[self.funct3][0] + "i"}")
-                print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
-            case "I-Type Load":
-                print(f"Name: {Mfunct3[self.funct3][0]}")
                 print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
             case "S-Type":
                 print(f"Name: {Mfunct3[self.funct3][1]}")
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={word_imm.int}")
             case "B-Type":
+                B_imm = imm_B(self.imm)
                 print(f"Name: {Bfunct3[self.funct3]}")
                 print(f"Registers: rs1={self.rs1.uint}, rs2={self.rs2.uint}, Imm={B_imm}")
             case "J-Type":
+                J_imm = imm_J(self.imm)
                 print(f"Name: jal ")
                 print(f"Registers: rd={self.rd.uint}, imm={J_imm}")
-            case "I-Type Jump":
-                print(f"Name: jalr")
-                print(f"Registers: rd={self.rd.uint}, rs1={self.rs1.uint}, Imm={word_imm.int}")
             case "U-Type Load" | "U-Type PC":
+                U_imm = imm_U(self.imm) #instr field displayed in instr
                 print(f"Name: {Uop[self.opcode]}")
                 print(f"Registers: rd={self.rd.uint}, imm={U_imm}")
         if(len(self.bin()) != 32):
@@ -458,15 +487,16 @@ class testcase(instruction): #tests a singular instruction
         #store: prior =  [M, rd1, rd2] 
         #branch: prior = [PC, rd1, rd2]
         #jal/jalr = [rd, PC, (rd1 if jalr)]
-        rd1 = (prior[1]) #hardcoded only for certain cases, replace later!
         J_imm = imm_J(self.imm)
         U_imm = imm_U_actual(self.imm)
         #NOTE: DUT values shouldn't be extracted here, only expected test values.
         match op[self.opcode]: #setting field operand (masking, signed vs unsigned, rd2 vs memory vs imm, etc.)
             case "R-Type": 
                 field = prior[2]
+                rd1 = (prior[1])
                 return testcase.R_I_model(self, field, rd1)
             case "I-Type": 
+                rd1 = (prior[1])
                 match Rfunct3[self.funct3][0]:
                     case "sltu": field = (self.imm[0:12]).uint
                     case "srl"|"sll": field = self.imm.int & SHIFT_MASK
@@ -474,6 +504,7 @@ class testcase(instruction): #tests a singular instruction
                 return testcase.R_I_model(self, field, rd1)
             case "I-Type Load": return prior[1]
             case "S-Type": #rd2 masking
+                rd1 = (prior[1])
                 match Mfunct3[self.funct3][1]: #expected value is always from rd, lsb first
                     case "sb": field = binary_to_signed((prior[2] & BYTE_MASK),8) 
                     case "sh": 
@@ -493,18 +524,10 @@ class testcase(instruction): #tests a singular instruction
                     case "bge": return branch if (prior[1] >= prior[2]) else PC_inc
                     case "bltu": return branch if (prior[1] < prior[2]) else PC_inc 
                     case "bgeu": return branch if (prior[1] >= prior[2]) else PC_inc
-            case "J-Type": #NOTE: 2 values to model
-                rd = prior[1] + 4
-                PC = prior[1] + J_imm
-                return [rd, PC]
-            case "I-Type Jump": #NOTE: 2 values to model
-                rd = prior[1] + 4
-                PC = prior[2] + self.imm[0:12].int
-                return [rd, PC]
-            case "U-Type Load":
-                return U_imm
-            case "U-Type PC":
-                return prior[1] + U_imm
+            case "J-Type": return [binary_to_signed(prior[1] + 4, 32), signed_to_binary(prior[1] + J_imm)] #prior[1] = PC NOTE: 2 values to model. 
+            case "I-Type Jump": return [binary_to_signed(prior[1] + 4, 32), signed_to_binary(prior[2] + self.imm[0:12].int)]#prior = [XX, PC, rd1] NOTE: 2 values to model
+            case "U-Type Load": return U_imm
+            case "U-Type PC": return binary_to_signed((prior[1] + U_imm), 32) #prior[1] = PC
     def monitor(self, operation): #returns 3 arguments read from DUT
         #will match the order of fields in instructions: add rd, rs1, rs2
         # "pre"  : won't print imm 
@@ -558,7 +581,7 @@ class testcase(instruction): #tests a singular instruction
                 elif(operation == "pre"):
                     print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
                     return [PC, rd1, rd2]
-            case "J-Type":
+            case "J-Type": #jal
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
                     print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm_J(self.dut)}")
@@ -566,8 +589,9 @@ class testcase(instruction): #tests a singular instruction
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}")
                     return [rd, PC]
-            case "I-Type Jump": #follows B-Type previous_rd1 logic?                
+            case "I-Type Jump": #jalr               
                 PC = dut_fetch.PC(self.dut)
+                rd1 = dut_fetch.reg(self.dut, self.rs1)
                 if(operation == "post"):
                     print(f"Actual: rd={rd}, PC={PC}, rd1={rd1}, imm={dut_fetch.imm(self.dut)}")
                     return [rd, PC]
@@ -591,7 +615,6 @@ class testcase(instruction): #tests a singular instruction
                     return [rd, PC]
     def checker(self, expected, actual): #NOTE: doesn't feature overflow handling due to "await"/async property of reset_dut
         fail = 0
-        expected_string = ["rd", "PC"]
         match op[self.opcode]: #basic check of values/registers of each instruction
             case "R-Type" | "I-Type": 
                 print(f"Expected rd: {expected}")
@@ -606,48 +629,22 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected PC: {expected}")
                 fail = dut_fetch.check_branch_instr(self, expected, actual)
             case "J-Type":
-                imm = imm_J(self.imm)
-                imm_actual = dut_fetch.imm_J(self.dut)
-                for i in [0,1]:
-                    print(f"Expected {expected_string[i]}: {expected[i]}")
-                    if(expected[i] != actual[i]):
-                        fail += 1
-                        print(f"Instruction failed: {(expected[i]- actual[i])} difference")
-                if(imm != imm_actual):
-                    fail += 1
+                    fail = dut_fetch.check_jump_instr(self, expected[0], actual[0], expected[1], actual[1], imm_J(self.imm), dut_fetch.imm_J(self.dut))
             case "I-Type Jump":                
-                imm = self.imm.int
-                imm_actual = dut_fetch.imm(self.dut)
-                for i in [0,1]:
-                    print(f"Expected {expected_string[i]}: {expected[i]}")
-                    if(expected[i] != actual[i]):
-                        fail += 1
-                        print(f"Instruction failed: {(expected[i]- actual[i])} difference")
-                if(imm != imm_actual):
-                    fail += 1
+                    fail = dut_fetch.check_jump_instr(self, expected[0], actual[0], expected[1], actual[1], self.imm[0:12].int, dut_fetch.imm(self.dut))
             case "U-Type Load" | "U-Type PC":
-                imm = imm_U(self.imm)
-                imm_actual = dut_fetch.imm_U(self.dut)
-                imm_actual_field = imm_U_actual(self.imm)
-                if(expected != actual):
-                    fail += 1
-                    print(f"Instruction failed: {(expected - actual)} difference")
-                if(imm_actual != imm_actual_field):
-                    print(f"Mismatching immediate values: DUT={bin(imm_actual)}")
-                    print(f"self.imm[0:32].bin: {self.imm[0:32].bin}")
-                    print(f"self.imm[12:32].bin: {self.imm[12:32].bin}")
-                    
-                    fail += 1
+                print(f"Expected rd: {expected}")
+                fail = dut_fetch.check_U_instr(self, expected, actual)
+
         if(fail != 0): #take fail count out of individual checker, for future possible extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
         else:
             print(f"Success! \n")
         return
-    
     def feed(self): #feeds instruction directly to DUT (beware of race conditions if using fetch_reg)
         self.dut.instr_cocotb.value = int(self.bin(), 2)        
 
-# @cocotb.test()
+@cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -681,7 +678,7 @@ async def R_I_OOP_test(dut):
         else:
             tb.checker(expected, actual)
 
-# @cocotb.test()
+@cocotb.test()
 async def Memory_instr_test(dut): #naive same testbench format as R & I type
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -723,10 +720,10 @@ async def Branch_Jump_instr_test(dut):
         test = instruction()
         instr_type = random.choice([0,1,2,3])  #randomize instruction type
         match instr_type:
-            # case _: instr = test.gen_B()
-            # case 1: instr = test.gen_J()
-            case _: instr = test.gen_U()
-            # case 3: instr = test.gen_I_jump()
+            case 0: instr = test.gen_B()
+            case 1: instr = test.gen_J()
+            case 2: instr = test.gen_U()
+            case 3: instr = test.gen_I_jump()
         tb = testcase(instr, dut)
             
         tb.decode(i)
