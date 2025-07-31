@@ -5,7 +5,7 @@ Requirements:
 - Vivado
 - Cocotb venv with WSL
 
-**Cocotb**
+**Cocotb** Completed!
 
     Errors:
         - For a lot of successful memory tests (6%), the memory doesn't match: data_memory[rd1 + imm] != data_memory[word_addr] (word_addr = addr[11:2])
