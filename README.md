@@ -23,6 +23,7 @@ Requirements:
 
     Current:
     Full constrained random coverage of all instructions (other than ecall and ebreak).
+    
     B-Type + Jump + U-Type
         - All instructions 100% pass rate! (even with 100k tests). 
         - This is the last set of instructions to fully verify!!!
@@ -46,17 +47,26 @@ Requirements:
             lw: 0 -> word (self-explanatory)
             - This also applies to store
         - mask memory to extract the correct value to compare to (say, upper half of memory if sh and byte_offset = 2)
-    - hash maps for converting opcode, funct3, and ALU_Operation to names
-    - instruction() class: creates instructions to feed to dut and testbench
-    - testcase(instruction) class: 
+        
+    Hash maps, bit-wise functions, and DUT setting:
+    - hash maps for converting opcode, funct3, and ALU_Operation to names    
+    - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes both and resets. 
+    - Logical left/right shift, different instr-type immediate generations, and signed/unsigned conversion.
+    - set_reg_addi: sets register values in the DUT to natural memory alignment constraints. 
+
+    Classes:
+    - instruction(): creates instructions to feed to dut and testbench
+    - testcase(instruction): 
         - tests a single instruction
         - every testbench component (is model + checker sufficient for scoreboard?)
         - inherits instruction class properties 
         - takes in DUT, prior memory and rd1 (for memory access/check)
-    - dut_fetch() class: 
+    - dut_fetch(): 
         - fetches values (reg, imm, memory) from DUT
         - more advanced methods involve operating on these values and printing statements.
-    - Randomize state of DUT: random RF and data_memory and a random_reset_dut which randomizes both and resets. 
+    - environment():
+        - Basically a wrapper for prior testbenches, and basic_CRT() tests all instructions in one testbench.
+        - Is an async def/coroutine object. Thus, it has gen_all (which handles setting for memory instructions) and overflow_checker (which resets upon severe overflow).
 
     Future:
     - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 

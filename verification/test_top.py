@@ -6,7 +6,7 @@ import logging
 
 from .testbench_components import * #relative import?
 
-@cocotb.test()
+# @cocotb.test()
 async def R_I_OOP_test(dut):
     """Test for R-type and I-type Instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -40,7 +40,7 @@ async def R_I_OOP_test(dut):
         else:
             tb.checker(expected, actual)
 
-@cocotb.test()
+# @cocotb.test()
 async def Memory_instr_test(dut): 
     """Test for load and store instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -52,9 +52,9 @@ async def Memory_instr_test(dut):
         test = instruction()
         instr_type = random.choice([0,1])
         if(instr_type == 0):
-            (instr, dut) = test.gen_I_load(dut)
+            instr = test.gen_I_load()
         else:
-            (instr, dut) = test.gen_S(dut)
+            instr = test.gen_S()
 
         await set_reg_addi(dut, instr.rs1, instr.funct3) #sets the rs1 value
         prior_rd1 = dut_fetch.reg(dut, instr.rs1) 
@@ -72,7 +72,7 @@ async def Memory_instr_test(dut):
         actual = tb.monitor("post") 
         tb.checker(expected, actual)   
         
-@cocotb.test()
+# @cocotb.test()
 async def Branch_Jump_instr_test(dut):
     """Test Branch and other jump instructions"""
     cocotb.start_soon(generate_clock(dut))
@@ -98,3 +98,15 @@ async def Branch_Jump_instr_test(dut):
         expected = tb.model(prior) 
         actual = tb.monitor("post") 
         tb.checker(expected, actual)   
+
+@cocotb.test()
+async def all_types_test(dut):
+    cocotb.start_soon(generate_clock(dut))
+    await reset_dut(dut)
+    await randomize_data(dut, 32) 
+    await randomize_rf(dut, 11) #11 = Num bits in addr - 1  
+    
+    # instr = instruction()
+    # tb = testcase(instr, dut)
+    env = environment(testcase(instruction(), dut), 10000)
+    await env.basic_CRT()

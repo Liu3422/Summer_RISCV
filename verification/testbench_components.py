@@ -1,7 +1,7 @@
 
 from bitstring import Bits
 import random
-
+import asyncio 
 import cocotb
 from cocotb.triggers import Timer, RisingEdge
 
@@ -76,6 +76,9 @@ async def set_reg_addi(dut, reg, funct3): #sets reg to value using addi
     await RisingEdge(dut.clk) 
     await Timer(10, units="ns")        
     dut = tb.dut
+    # prior_rd1 = dut_fetch.reg(dut, instr.rs1) 
+    # prior_memory = dut_fetch.memory(dut, prior_rd1, instr.imm.int)
+    # return (prior_rd1, prior_memory)
 
 #bitwise operations
 def binary_to_signed(val, n_bits):
@@ -169,7 +172,7 @@ class dut_fetch(): #fetches value from DUT
         return DUT.signed_imm.value.signed_integer
     def imm_J(DUT):
         return DUT.J_imm.value.signed_integer
-    def imm_U(DUT):
+    def imm_U(DUT): #trivial. identical to dut_fetch.imm
         return dut_fetch.imm(DUT)
     def unsigned_imm(DUT):
         return DUT.imm_out.value.integer
@@ -325,7 +328,7 @@ class instruction(): #generates the instruction to feed into DUT/testbench
         self.funct3 = Bits(uint=random.getrandbits(3), length=3)
         self.funct7 = Bits(uint=random.choice(["0", "32"]), length=7) #32 would only apply to SUB and SRA
         self.opcode = Bits(uint=random.choice([int("0110011",2), int("0010011",2), int("0000011",2), int("0100011",2), int("1100011",2), 
-                                            int("1101111",2), int("1100111",2), int("0110111",2), int("0010111",2), int("1110011",2)]),
+                                            int("1101111",2), int("1100111",2), int("0110111",2), int("0010111",2)]),
                                             length=7)
         self.imm = Bits(int=random.randint(-(2**31), 2**31 - 1), length = 32)
         return self
@@ -357,7 +360,7 @@ class instruction(): #generates the instruction to feed into DUT/testbench
     def gen_I_instr(self): #generates the I-type instr
         return Bits().join([self.imm[0:12], self.rs1, self.funct3, self.rd, self.opcode])        
         # return Bits().join([self.imm[19:31], self.rs1, self.funct3, self.rd, self.opcode])
-    def gen_I_load(self, DUT): #generates a random I-type load test
+    def gen_I_load(self): #generates a random I-type load test
         self = self.gen_random()
         self.opcode = Bits(bin="0000011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2,4,5]), length=3)
@@ -365,8 +368,8 @@ class instruction(): #generates the instruction to feed into DUT/testbench
             case "lb" | "lbu": self.imm = Bits(uint=random.choice(range(32)), length=12)
             case "lh" | "lhu": self.imm = Bits(uint=random.choice(range(0,32,2)), length=12) 
             case "lw": self.imm = Bits(uint=random.choice(range(0,32,4)), length=12) 
-        return (self, DUT)
-    def gen_S(self, DUT):
+        return self
+    def gen_S(self):
         self = self.gen_random()
         self.opcode = Bits(bin="0100011", length=7)
         self.funct3 = Bits(uint=random.choice([0,1,2]), length=3)
@@ -374,7 +377,7 @@ class instruction(): #generates the instruction to feed into DUT/testbench
             case "sb": self.imm = Bits(uint=random.choice(range(STORE_LIM)), length=12)
             case "sh": self.imm = Bits(uint=random.choice(range(0,STORE_LIM,2)), length=12) 
             case "sw": self.imm = Bits(uint=random.choice(range(0,STORE_LIM,4)), length=12) 
-        return (self, DUT)
+        return self
     def gen_S_instr(self): 
         return Bits().join([self.imm[0:7], self.rs2, self.rs1, self.funct3, self.imm[7:12], self.opcode])
         # return Bits().join([self.imm[20:26], self.rs2, self.rs1, self.funct3, self.imm[27:31], Bits(bin="0100011", length=7)])
@@ -410,6 +413,7 @@ class instruction(): #generates the instruction to feed into DUT/testbench
             case "B-Type": return (self.gen_B_instr()).bin
             case "J-Type": return (self.gen_J_instr()).bin
             case "U-Type PC" | "U-Type Load": return (self.gen_U_instr()).bin 
+
 class testcase(instruction): #tests a singular instruction
     def __init__(self, instr, DUT, prior_rd1=0, prior_memory=0):
         self.__dict__.update(instr.__dict__)
@@ -520,7 +524,7 @@ class testcase(instruction): #tests a singular instruction
             case "I-Type Jump": return [binary_to_signed(prior[1] + 4, 32), signed_to_unsigned(prior[2] + self.imm[0:12].int)]#prior = [XX, PC, rd1] NOTE: 2 values to model
             case "U-Type Load": return U_imm
             case "U-Type PC": return binary_to_signed((prior[1] + U_imm), 32) #prior[1] = PC
-    def monitor(self, operation): #returns 3 arguments read from DUT
+    def monitor(self, operation): #returns values read from DUT. By far the longest object, look into making it shorter.
         #will match the order of fields in instructions: add rd, rs1, rs2
         # "pre"  : won't print imm 
         # "post" : will return only the expected value
@@ -635,3 +639,66 @@ class testcase(instruction): #tests a singular instruction
         return
     def feed(self): #feeds instruction directly to DUT (beware of race conditions if using fetch_reg)
         self.dut.instr_cocotb.value = int(self.bin(), 2)        
+class environment(testcase): #creates the whole testing environment
+    def __init__(self, testcase, num_test):
+        self.__dict__.update(testcase.__dict__)
+        self.num_test = num_test
+        self.prior = None
+        self.expected = None
+        self.types = None #Instruction types to test. Default is all
+
+    async def basic_CRT(self): #the constrained random testing featured in previous cocotb testbenches.
+        for i in range(self.num_test):
+            await self.gen_all()
+            self.decode(i)
+            self.feed()
+            
+            self.prior = self.monitor("pre") #prior rs1, rs2, rd register values of DUT
+            await RisingEdge(self.dut.clk) 
+            await Timer(10, units="ns")        
+            
+            self.expected = self.model(self.prior) 
+            self.actual = self.monitor("post")
+            overflow_occured = await self.overflow_checker()
+            if (overflow_occured == False):
+                self.checker(self.expected, self.actual)
+    async def gen_all(self): #directly updates self's attributes
+        instr_type = random.choice([0,1,2,3,4,5,6,7])
+        instr = instruction()
+        match instr_type:
+            case 0: instr.gen_R(self.dut)
+            case 1: instr.gen_I()
+            case 2: #need to return prior memory and rd1
+                instr.gen_I_load()
+                await set_reg_addi(self.dut, instr.rs1, instr.funct3) #how to make this all one function? NOTE: instr in this function are add/addi, not load/store 
+                self.prior_rd1 = dut_fetch.reg(self.dut, instr.rs1) 
+                self.prior_memory = dut_fetch.memory(self.dut, self.prior_rd1, instr.imm.int)
+            case 3: instr.gen_I_jump()
+            case 4: 
+                instr.gen_S()
+                await set_reg_addi(self.dut, instr.rs1, instr.funct3) 
+                self.prior_rd1 = dut_fetch.reg(self.dut, instr.rs1) 
+                self.prior_memory = dut_fetch.memory(self.dut, self.prior_rd1, instr.imm.int)
+            case 5: instr.gen_B()
+            case 6: instr.gen_J()
+            case 7: instr.gen_U()
+        self.__dict__.update(instr.__dict__)       
+    async def overflow_checker(self): #returns whether overflow occurred
+        match op[self.opcode]:
+            case "J-Type" | "I-Type Jump":
+                for expected_value in self.expected:
+                    if((expected_value > MAX_32B_signed) or (expected_value < MIN_32B_signed)): #Overflow check
+                        print(f"Signed overflow detected: {expected_value} \n")
+                        return True
+                return False
+            case _:
+                if (self.expected.bit_length() > 64): 
+                    print(f"Severe overflow detected: {self.expected.bit_length()} bits") 
+                    await random_reset_dut(self.dut)
+                    return True
+                elif((self.expected > MAX_32B_signed) or (self.expected < MIN_32B_signed)): #Overflow check
+                    print(f"Signed overflow detected: {self.expected} \n")
+                    return True
+                else:
+                    return False
+            

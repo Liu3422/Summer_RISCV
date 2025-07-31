@@ -54,8 +54,8 @@ always_comb begin
         3'd1: branch_cond = !zero; //bne
         3'd4: branch_cond = ($signed(ALU_Out) < 0); //blt
         3'd5: branch_cond = ($signed(ALU_Out) >= 0); //bge
-        3'd6: branch_cond = (ALU_Out >= rd1); //bltu
-        3'd7: branch_cond = (ALU_Out < rd1); //bgeu
+        3'd6: branch_cond = (ALU_Out > rd1); //bltu
+        3'd7: branch_cond = (ALU_Out <= rd1); //bgeu
         default: branch_cond = 0; //undefined region of operation, no branch.
         endcase
     end

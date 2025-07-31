@@ -1,6 +1,6 @@
+from .testbench_components import *
 # @cocotb.test()
-#NOTE: This test requires fetch_reg_file/DUT_instr to be commented out, due to race conditions between inserting 
-#the instruction through this testbench and fetching from the instruction. 
+#NOTE: This is the 1st version of cocotb, prior to using an OOP approach + testbench components.
 async def adder_randomized_test(dut):
     """Test for adding 2 random numbers, reset on overflow"""
     cocotb.start_soon(generate_clock(dut))
