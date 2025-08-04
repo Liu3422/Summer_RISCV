@@ -169,12 +169,6 @@ class dut_fetch(): #fetches value from DUT
         return DUT.DUT_RF.RF[bits_index.uint].value.integer
     def imm(DUT):
         return DUT.imm_out.value.signed_integer
-    def imm_B(DUT):
-        return DUT.signed_imm.value.signed_integer
-    def imm_J(DUT):
-        return DUT.J_imm.value.signed_integer
-    def imm_U(DUT): #trivial. identical to dut_fetch.imm
-        return dut_fetch.imm(DUT)
     def unsigned_imm(DUT):
         return DUT.imm_out.value.integer
     def control(DUT):
@@ -265,7 +259,7 @@ class dut_fetch(): #fetches value from DUT
     def check_branch_instr(self, expected, actual):
         fail = 0
         imm = imm_B(self.imm)
-        imm_actual = dut_fetch.imm_B(self.dut)
+        imm_actual = dut_fetch.imm(self.dut)
         if(expected != actual):
             (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
             unsigned_value = rd1 - rd2
@@ -302,7 +296,7 @@ class dut_fetch(): #fetches value from DUT
         return fail
     def check_U_instr(self, expected, actual):
         fail = 0
-        imm_actual = dut_fetch.imm_U(self.dut)
+        imm_actual = dut_fetch.imm(self.dut)
         imm_actual_field = imm_U_actual(self.imm)
         if(expected != actual):
             fail += 1
@@ -573,7 +567,7 @@ class testcase(instruction): #tests a singular instruction
                     case "bltu" | "bgeu": (rd1, rd2) = (dut_fetch.unsigned_reg(self.dut, self.rs1), dut_fetch.unsigned_reg(self.dut, self.rs2))
                     case _: (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
                 if(operation == "post"):
-                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={dut_fetch.imm_B(self.dut)}")
+                    print(f"Actual: PC={PC}, rd1={rd1}, rd2={rd2}, imm={dut_fetch.imm(self.dut)}")
                     return PC
                 elif(operation == "pre"):
                     print(f"Pre-instruction: PC={PC}, rd1={rd1}, rd2={rd2}")
@@ -581,7 +575,7 @@ class testcase(instruction): #tests a singular instruction
             case "J-Type": #jal
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm_J(self.dut)}")
+                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm(self.dut)}")
                     return [rd, PC]
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}")
@@ -597,7 +591,7 @@ class testcase(instruction): #tests a singular instruction
                     return [rd, PC, rd1]
             case "U-Type Load":
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, imm={dut_fetch.imm_U(self.dut)}")
+                    print(f"Actual: rd={rd}, imm={dut_fetch.imm(self.dut)}")
                     return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}")
@@ -605,7 +599,7 @@ class testcase(instruction): #tests a singular instruction
             case "U-Type PC":
                 PC = dut_fetch.PC(self.dut)
                 if(operation == "post"):
-                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm_U(self.dut)}")
+                    print(f"Actual: rd={rd}, PC={PC}, imm={dut_fetch.imm(self.dut)}")
                     return rd
                 elif(operation == "pre"):
                     print(f"Pre-instruction: rd={rd}, PC={PC}")
@@ -626,7 +620,7 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected PC: {expected}")
                 fail = dut_fetch.check_branch_instr(self, expected, actual)
             case "J-Type":
-                    fail = dut_fetch.check_jump_instr(self, expected[0], actual[0], expected[1], actual[1], imm_J(self.imm), dut_fetch.imm_J(self.dut))
+                    fail = dut_fetch.check_jump_instr(self, expected[0], actual[0], expected[1], actual[1], imm_J(self.imm), dut_fetch.imm(self.dut))
             case "I-Type Jump":                
                     fail = dut_fetch.check_jump_instr(self, expected[0], actual[0], expected[1], actual[1], self.imm[0:12].int, dut_fetch.imm(self.dut))
             case "U-Type Load" | "U-Type PC":

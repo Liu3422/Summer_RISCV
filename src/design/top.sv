@@ -63,15 +63,13 @@ end
 assign jal_cond = (UncondJump & PCSrc == 2'b01);
 assign jalr_cond = (UncondJump & PCSrc == 2'b10);
 
-assign signed_imm = {{19{imm_out[12]}}, imm_out[12:0]}; // immediate is always signed
-assign J_imm = {{11{imm_out[20]}}, imm_out[20:1], 1'b0};
 always_comb begin
     if (jal_cond) 
-        PC_Next = PC + J_imm;
+        PC_Next = PC + imm_out;
     else if(branch_cond) 
-        PC_Next = PC + signed_imm; //sign extension for signed imm_out
+        PC_Next = PC + imm_out; //sign extension for signed imm_out
     else if (jalr_cond) 
-        PC_Next = rd1 + signed_imm; 
+        PC_Next = rd1 + imm_out; 
     else
         PC_Next = PC + 4;
 end
