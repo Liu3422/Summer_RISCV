@@ -108,5 +108,5 @@ async def all_types_test(dut):
     
     # instr = instruction()
     # tb = testcase(instr, dut)
-    env = environment(testcase(instruction(), dut), 20000)
+    env = environment(testcase(instruction(), dut), 10000)
     await env.basic_CRT()

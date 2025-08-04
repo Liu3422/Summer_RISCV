@@ -1,5 +1,5 @@
 This is an implementation of the RV32I ISA, as seen in "Computer Organization and Design, RISC-V Edition" by Patterson and Hennessey. 
-This repository consists of a single-cycle implementation, bitstreaming to the Nexys A7 dev board via Vivado and verification with cocotb.
+This repository consists of a single-cycle implementation, bitstreaming to the Nexys A7 dev board via Vivado and constrained random verification with cocotb.
 
 Requirements:
 - Vivado
@@ -13,20 +13,15 @@ Requirements:
             - Is it prior vs post clk immediate values? One may take the prior instruction's imm while the other takes the current instr imm.
                 - No indication of this with glance at code.
 
-        - <5 cases (per 10k) where model outputs 0 for expected memory when it isn't.
-
-    Info:
-        - Difference between instruction immediate and actual immediate for U-Type.
-            - Actual imm is the instr field left shifted 12.
-        - Decode will show the instr field
-        - Actual will show the actual imm
-
     Current:
-    Full constrained random coverage of all instructions (other than ecall and ebreak).
+    Full constrained random coverage and verification of all instructions (other than ecall and ebreak).
     
     B-Type + Jump + U-Type
         - All instructions 100% pass rate! (even with 100k tests). 
         - This is the last set of instructions to fully verify!!!
+        - Difference between instruction immediate and actual immediate for U-Type.
+            - Actual imm is the instr field left shifted 12.
+        - Decode will show the instr field, actual will show  imm_out
 
     R-Type (and I-Type counterpart)
         - 0% error with N=10,000 in < 5 seconds (100k < 60sec)
@@ -59,26 +54,23 @@ Requirements:
     - testcase(instruction): 
         - tests a single instruction
         - every testbench component (is model + checker sufficient for scoreboard?)
-        - inherits instruction class properties 
         - takes in DUT, prior memory and rd1 (for memory access/check)
-    - dut_fetch(): 
-        - fetches values (reg, imm, memory) from DUT
+    - dut_fetch(DUT): 
+        - fetches values (reg, imm, memory, etc) from DUT
         - more advanced methods involve operating on these values and printing statements.
-    - environment():
+    - environment(testcase):
         - Basically a wrapper for prior testbenches, and basic_CRT() tests all instructions in one testbench.
         - Is an async def/coroutine object. Thus, it has gen_all (which handles setting for memory instructions) and overflow_checker (which resets upon severe overflow).
 
     Future:
-    - Create more classes: Test_environment, dut_write (only a couple dut_fetch instructions change the dut currently) 
+    - Create more classes/objects: dut_write, bitwise
     - Store instructions into memory for DUT to fetch?
         - Idea: store batches (say 1000), execute them all, flush, repeat.
     - "Fail-mode" with truly random/incorrect instructions
-        - Only start doing after all other instructions are done.
     - Use cocotb's built-in "logging" library instead of manually printing.
         - Moving from hardcoded debug prints to OOP logging. 
+    - GTKWave? Verilator can produce this, though actually tracing through that much data is a challenge. 
 
-    Code Quality (in progress):
-    - dut_fetch can be expanded to include instruction type, signed/unsigned pair, maybe names/special instr.
 
     RISCV Instruction Set Manual: 
     The JALR instruction now clears the lowest bit of the calculated target address, to simplify hardware and to allow auxiliary information to be stored in function pointers.
@@ -98,21 +90,19 @@ Requirements:
         - Do I need to copy RV32I_core into design if I plan on importing it as custom IP? I don't think there are difference anyway
     - wavedroms:
         - display_controller
-**RV32I_core**
-   Completed!
+
+**RV32I_core** Completed!
 
     Current: 
-    - Basic verification of all instructions.
+    - Basic CRT verification of all instructions.
     - Basic program (fibonnaci) is working and verified. 
 
     Concerns:
     - NONE!!!
-    - Need to define specs more. How many instructions/data can it hold? Would determine PC and data_memory bounds. 
-        -Data memory = 1024 words. Instruction memory = 64 words/instructions
-        -Thus, limit rs1 value to 1024 unsigned for memory instructions? Limit addr to ALU_Out[11:0]?
-            - Or assign data memory to 32-bit address? Kind of overkill, since that's 2^28 bytes. 
+
     Current iteration:
-        -12 bit addr 
-        -combinational read, clk'd write
-        -Only accepts natural alignment memory.
-    - Currently little endian (LSB in lower address first) in cocotb and memory_reg_file
+        - 12 bit addr 
+        - Single-cycle: combinational read, clk'd write
+        - Only accepts natural alignment memory. Undefined behavior with misaligned memory.
+        - Data memory = 1024 words. Instruction memory = 64 words/instructions
+        - Currently little endian (LSB in lower address first) in cocotb and memory_reg_file

@@ -270,8 +270,8 @@ class dut_fetch(): #fetches value from DUT
             (rd1, rd2) = (dut_fetch.reg(self.dut, self.rs1), dut_fetch.reg(self.dut, self.rs2))
             unsigned_value = rd1 - rd2
             if((unsigned_value > MAX_32B_signed) or (unsigned_value < MIN_32B_signed)):
-                print("Overflow occured, test is invalid")
-                return 0 #what would I want to return during overflow?
+                print("Overflow occured")
+                return -1 
             fail += 1
             print(f"Instruction failed: {(expected - actual)} difference")
             print(f"Signed: ALU_in1={self.dut.ALU_in1.value.signed_integer}, ALU_in2={self.dut.ALU_in2.value.signed_integer}, ALU_Out={self.dut.ALU_Out.value.signed_integer}")
@@ -535,11 +535,11 @@ class testcase(instruction): #tests a singular instruction
             case "R-Type":
                 (rd1, rd2, imm) = dut_fetch.register_mask(self)
                 if(operation == "post"): 
-                    print("Actual: ", end="")
+                    print(f"Actual: rd={rd}, rd1={rd1}, rd2={rd2}")
                     return rd
-                elif(operation == "pre"): print("Pre-instruction: ", end="")
-                print(f"rd={rd}, rd1={rd1}, rd2={rd2}")
-                return [rd, rd1, rd2]
+                elif(operation == "pre"): 
+                    print(f"Pre-instruction: rd={rd}, rd1={rd1}, rd2={rd2}")
+                    return [rd, rd1, rd2]
             case "I-Type":
                 (rd1, rd2, imm) = dut_fetch.register_mask(self)
                 if(operation == "post"): #irrelevant prior imm field ignored
@@ -633,8 +633,10 @@ class testcase(instruction): #tests a singular instruction
                 print(f"Expected rd: {expected}")
                 fail = dut_fetch.check_U_instr(self, expected, actual)
 
-        if(fail != 0): #take fail count out of individual checker, for possible future extension (more extensive checks, etc.)
+        if(fail > 0): #take fail count out of individual checker, for possible future extension (more extensive checks, etc.)
             print(f"{fail} incorrect test(s)\n") #NOTE: This is per singular instruction
+        elif(fail == -1): #invalid test due to overflow (will update to include other cases)
+            print("Test is invalid\n")
         else:
             print(f"Success! \n")
         return
@@ -698,12 +700,11 @@ class environment(testcase): #creates the whole testing environment
                             print(f"Unsigned overflow detected: {expected_value} \n")
                             return True
                     return False
-            case "B-Type":
-                if(Bfunct3[self.funct3] == "bltu" or Bfunct3[self.funct3] == "bgeu"):
-                    if((self.expected > MAX_32B_unsigned)): #Overflow check
-                            print(f"Unsigned overflow detected: {expected_value} \n")
-                            return True
-                    return False
+            case "B-Type": #needs another overflow check for rd1-rd2
+                if((self.expected > MAX_32B_unsigned)): #Overflow check
+                        print(f"Unsigned overflow detected: {expected_value} \n")
+                        return True
+                return False
         if (self.expected.bit_length() > 64): 
             print(f"Severe overflow detected: {self.expected.bit_length()} bits") 
             await random_reset_dut(self.dut)

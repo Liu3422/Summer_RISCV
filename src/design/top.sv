@@ -119,7 +119,7 @@ decode_reg_file DUT_RF (.clk(clk), .n_rst(n_rst),
 logic [3:0] ALU_Operation; //output from ALU_control
 logic [31:0] ALU_Out, ALU_in1, ALU_in2; //ALU_in1: rd1 or PC. ALU_in2: rd2 or imm_gen
 
-assign ALU_in2 = (ALUSrc) ? (Utype ? ({imm_out[31:12], 12'b0}): {{20{imm_out[11]}}, imm_out[11:0]}): rd2; 
+assign ALU_in2 = (ALUSrc) ? imm_out : rd2; 
 assign ALU_in1 = Utype ? ((Auipc) ? PC : 32'b0): rd1; 
 
 ALU DUT4 (  
@@ -152,5 +152,3 @@ imm_gen DUT7(
 );
 
 endmodule
-
-
